@@ -197,10 +197,10 @@ function onPickFile(event) {
 }
 
 const CAMERA_HINT = {
-  ring: "손을 가이드에 맞추고 반지 손가락을 원에 두세요",
-  bracelet: "손목을 타원 가이드에 맞춰 주세요",
-  earring: "얼굴·귀가 가이드 안에 들어오게 맞춰 주세요",
-  necklace: "목·쇄골이 가이드 안에 보이게 맞춰 주세요",
+  ring: "손 실루엣에 맞추고, 노란 원에 반지 손가락을 두세요",
+  bracelet: "팔 가이드 폭에 팔을 맞추고, + 교차점에 손목을 두세요",
+  earring: "얼굴 가이드 안에 들어오게 · 귀 포인트에 귀를 맞추세요",
+  necklace: "상체 가이드에 맞추고 목·쇄골이 보이게 하세요",
 };
 
 function resolveType() {
@@ -278,13 +278,9 @@ function shutterCapture() {
     setStatus("카메라가 아직 준비되지 않았습니다.", "is-err");
     return;
   }
-  // Mirror back (preview is mirrored)
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-  const ctx = canvas.getContext("2d");
-  ctx.translate(canvas.width, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(video, 0, 0);
+  canvas.getContext("2d").drawImage(video, 0, 0);
   canvas.toBlob((blob) => {
     if (!blob) {
       setStatus("촬영에 실패했습니다.", "is-err");
@@ -311,7 +307,7 @@ async function runMergeTryOn() {
         cover: state.item.sourceUrl || state.item.cover,
         title: state.item.title,
       }, (m) => setStatus(m)),
-      45000,
+      60000,
       "주얼리 전처리 시간 초과"
     );
 
