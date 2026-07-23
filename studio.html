@@ -8,7 +8,7 @@
   <base href="./" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon10" />
+  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon12" />
 </head>
 <body class="studio-body">
   <div class="studio-shell">
@@ -32,13 +32,51 @@
 
       <section id="panelCapture" class="panel panel-capture">
         <div class="panel-head"><h2>내 사진</h2></div>
-        <div class="panel-frame capture-frame">
+        <div class="panel-frame capture-frame" id="captureFrame">
           <img id="bodyPreview" class="is-hidden" alt="" />
           <div id="captureEmpty" class="empty-state">
-            <strong>사진 준비</strong>
-            <span>손·귀·목이 보이게 촬영하거나 업로드하세요.</span>
+            <strong id="guideTitle">사진 준비</strong>
+            <span id="guideHint">가이드에 맞춰 촬영하거나 업로드하세요.</span>
+          </div>
+          <!-- Camera-app style pose guides -->
+          <div id="poseGuide" class="pose-guide" data-type="bracelet" aria-hidden="true">
+            <svg class="guide-svg" viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet">
+              <!-- bracelet -->
+              <g class="guide-layer" data-for="bracelet">
+                <path class="guide-silhouette" d="M78 20c18-8 40-6 52 10 8 10 10 26 6 40l-22 150c-2 12-12 22-24 22s-22-10-24-22L48 70c-4-16 0-34 12-44 6-5 12-7 18-6z" />
+                <ellipse class="guide-target" cx="92" cy="168" rx="34" ry="12" transform="rotate(-18 92 168)" />
+                <text class="guide-label" x="100" y="248">손목을 가이드에 맞춰 주세요</text>
+              </g>
+              <!-- ring -->
+              <g class="guide-layer" data-for="ring">
+                <path class="guide-silhouette" d="M70 40c20-18 55-18 70 6 8 12 6 30-2 42l-28 120c-6 22-34 22-40 0L48 90c-8-14-6-34 6-46 5-5 10-6 16-4z" />
+                <circle class="guide-target" cx="118" cy="128" r="14" />
+                <text class="guide-label" x="100" y="248">반지 손가락을 원에 맞춰 주세요</text>
+              </g>
+              <!-- earring -->
+              <g class="guide-layer" data-for="earring">
+                <path class="guide-silhouette" d="M108 36c28 4 48 30 46 62-2 36-28 58-54 62-30 4-58-18-62-48-4-32 18-62 48-70 7-2 15-2 22-6z" />
+                <path class="guide-silhouette soft" d="M148 92c8 2 16 12 14 24-2 10-10 16-20 14" />
+                <ellipse class="guide-target" cx="150" cy="118" rx="10" ry="16" />
+                <text class="guide-label" x="100" y="248">귀가 보이게 얼굴을 맞춰 주세요</text>
+              </g>
+              <!-- necklace -->
+              <g class="guide-layer" data-for="necklace">
+                <path class="guide-silhouette" d="M70 28c18-16 42-16 60 0 8 8 12 20 10 32l-6 20c28 10 48 34 52 62H24c4-28 24-52 52-62l-6-20c-2-12 2-24 10-32z" />
+                <path class="guide-target line" d="M58 118c22 36 62 36 84 0" />
+                <circle class="guide-target dot" cx="100" cy="148" r="8" />
+                <text class="guide-label" x="100" y="248">목·쇄골이 보이게 찍어 주세요</text>
+              </g>
+            </svg>
           </div>
         </div>
+        <div class="part-tabs" id="partTabs" role="tablist" aria-label="착용 부위">
+          <button type="button" class="part-tab" data-type="ring" role="tab">반지</button>
+          <button type="button" class="part-tab is-active" data-type="bracelet" role="tab" aria-selected="true">팔찌</button>
+          <button type="button" class="part-tab" data-type="earring" role="tab">귀걸이</button>
+          <button type="button" class="part-tab" data-type="necklace" role="tab">목걸이</button>
+        </div>
+        <input type="hidden" id="typeHint" value="bracelet" />
         <div class="capture-toolbar">
           <label class="btn btn-accent file-btn">촬영
             <input id="captureInput" type="file" accept="image/*" capture="environment" hidden />
@@ -46,13 +84,6 @@
           <label class="btn btn-ghost file-btn">업로드
             <input id="fileInput" type="file" accept="image/*" hidden />
           </label>
-          <select id="typeHint" class="select" aria-label="착용 부위">
-            <option value="bracelet" selected>손목(팔찌)</option>
-            <option value="ring">손가락(반지)</option>
-            <option value="earring">귀(귀걸이)</option>
-            <option value="necklace">목(목걸이)</option>
-            <option value="auto">자동</option>
-          </select>
         </div>
       </section>
 
@@ -72,6 +103,6 @@
     </footer>
   </div>
 
-  <script type="module" src="./src/studio.js?v=20260724-tryon10"></script>
+  <script type="module" src="./src/studio.js?v=20260724-tryon12"></script>
 </body>
 </html>
