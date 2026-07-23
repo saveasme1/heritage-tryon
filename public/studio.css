@@ -1,0 +1,166 @@
+:root {
+  --bg: #10100e;
+  --panel: #1a1814;
+  --ink: #f6f1e8;
+  --muted: #a89f92;
+  --line: #2f2b25;
+  --accent: #d4a35c;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100%; }
+body {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 14px calc(18px + env(safe-area-inset-bottom));
+}
+
+.studio-top {
+  display: flex; align-items: flex-start; gap: 14px;
+  max-width: 1200px; width: 100%; margin: 0 auto 14px;
+}
+.back {
+  color: var(--muted); text-decoration: none; font-size: 13px; padding-top: 8px; white-space: nowrap;
+}
+.eyebrow { margin: 0; letter-spacing: .16em; font-size: 11px; color: var(--accent); }
+h1 { margin: 4px 0 0; font-size: clamp(20px, 4vw, 30px); font-weight: 700; }
+
+.studio-stage {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+  position: relative;
+  min-height: 58vh;
+  transition: gap .7s var(--ease);
+}
+.studio-stage.is-merging {
+  gap: 0;
+}
+.studio-stage.is-merged {
+  grid-template-columns: 1fr;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  transition: transform .85s var(--ease), opacity .75s var(--ease), border-radius .7s var(--ease);
+  will-change: transform, opacity;
+}
+.panel-label {
+  margin: 0; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+}
+.panel-frame {
+  flex: 1;
+  min-height: 280px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0a0908;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.panel-frame img,
+.panel-frame video,
+.panel-frame canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.panel-meta { margin: 0; color: var(--muted); font-size: 12px; }
+.capture-hint {
+  position: absolute; inset: 0; margin: auto; height: fit-content;
+  text-align: center; color: var(--muted); padding: 16px; pointer-events: none;
+}
+.capture-actions, .result-actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.btn, .type-hint {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: #12100e;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn.primary { background: var(--accent); color: #1a140c; border-color: transparent; font-weight: 700; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.file-btn { display: inline-flex; align-items: center; }
+.type-hint { min-width: 96px; }
+
+.studio-foot {
+  max-width: 1200px; width: 100%; margin: 14px auto 0;
+  display: grid; gap: 10px;
+}
+.status { margin: 0; color: var(--muted); min-height: 1.4em; font-size: 13px; }
+.status.is-err { color: #d56b5c; }
+.status.is-ok { color: #7dba74; }
+.merge-btn {
+  width: 100%;
+  min-height: 56px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #e0b46d, #c4893d);
+  color: #1a140c;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(212, 163, 92, .25);
+  transition: transform .25s var(--ease), opacity .25s;
+}
+.merge-btn:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+.merge-btn:not(:disabled):hover { transform: translateY(-1px); }
+
+/* merge animation */
+.studio-stage.is-merging .panel-product {
+  transform: translateX(42%);
+  opacity: .35;
+}
+.studio-stage.is-merging .panel-capture {
+  transform: translateX(-42%);
+  opacity: .35;
+}
+.studio-stage.is-merged .panel-product,
+.studio-stage.is-merged .panel-capture {
+  display: none;
+}
+.studio-stage.is-merged .panel-result {
+  display: flex;
+  animation: rise .7s var(--ease) both;
+}
+@keyframes rise {
+  from { opacity: 0; transform: scale(.92); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 820px) {
+  .studio-stage {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .panel-frame { min-height: 220px; }
+  .studio-stage.is-merging .panel-product {
+    transform: translateY(28%);
+  }
+  .studio-stage.is-merging .panel-capture {
+    transform: translateY(-28%);
+  }
+  .merge-btn { min-height: 52px; font-size: 16px; position: sticky; bottom: 8px; }
+}

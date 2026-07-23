@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>HERITAGE · Try It On</title>
+  <base href="./" />
+  <link rel="stylesheet" href="./public/studio.css" />
+</head>
+<body>
+  <header class="studio-top">
+    <a class="back" href="https://hand-made.kr/landing.html?open=portfolio">← Portfolio</a>
+    <div>
+      <p class="eyebrow">TRY IT ON</p>
+      <h1 id="productTitle">HERITAGE</h1>
+    </div>
+  </header>
+
+  <main id="studioStage" class="studio-stage">
+    <section id="panelProduct" class="panel panel-product">
+      <p class="panel-label">Product</p>
+      <div class="panel-frame">
+        <img id="productImage" alt="선택한 포트폴리오 주얼리" />
+      </div>
+      <p id="productMeta" class="panel-meta"></p>
+    </section>
+
+    <section id="panelCapture" class="panel panel-capture">
+      <p class="panel-label">Your Photo · Finger / Ear / Neck</p>
+      <div class="panel-frame capture-frame">
+        <video id="camVideo" playsinline autoplay muted hidden></video>
+        <img id="bodyPreview" alt="촬영·업로드 미리보기" hidden />
+        <canvas id="camCanvas" hidden></canvas>
+        <p id="captureHint" class="capture-hint">손 · 귀 · 목이 잘 보이게 촬영하거나 업로드하세요</p>
+      </div>
+      <div class="capture-actions">
+        <button type="button" id="startCam" class="btn">카메라</button>
+        <button type="button" id="snapCam" class="btn primary" disabled>Take Photo</button>
+        <label class="btn file-btn">Upload<input id="fileInput" type="file" accept="image/*" capture="environment" hidden /></label>
+        <select id="typeHint" class="type-hint" title="착용 부위">
+          <option value="auto">자동</option>
+          <option value="ring">Finger</option>
+          <option value="earring">Ear</option>
+          <option value="necklace">Neck</option>
+        </select>
+      </div>
+    </section>
+
+    <section id="panelResult" class="panel panel-result" hidden>
+      <p class="panel-label">Preview</p>
+      <div class="panel-frame result-frame">
+        <canvas id="resultCanvas"></canvas>
+      </div>
+      <div class="result-actions">
+        <button type="button" id="downloadBtn" class="btn primary">다운로드</button>
+        <button type="button" id="retryBtn" class="btn">다시 시도</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="studio-foot">
+    <p id="status" class="status">제품을 확인하고 사진을 준비하세요.</p>
+    <button type="button" id="mergeTryOn" class="merge-btn" disabled>Try It On</button>
+  </footer>
+
+  <script src="https://docs.opencv.org/4.x/opencv.js" async></script>
+  <script type="module" src="./src/studio.js"></script>
+</body>
+</html>
