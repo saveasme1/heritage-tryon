@@ -1,4 +1,4 @@
-/** Portfolio loader — read-only from public Heritage Pages (does not modify production). */
+/** Portfolio loader — read-only from public Heritage Pages. */
 
 const ASSET_BASES = [
   "https://hand-made.kr/",
@@ -40,13 +40,28 @@ export async function loadPortfolio() {
   throw lastError || new Error("포트폴리오를 불러오지 못했습니다.");
 }
 
+/**
+ * Infer wear part from product title/category.
+ * Order matters: bracelet before bare "링", etc.
+ */
 export function guessTypeFromText(title = "", content = "") {
   const text = `${title} ${content}`.toLowerCase();
-  if (/귀걸이|이어링|earring|pierce|피어싱/.test(text)) return "earring";
-  if (/목걸이|네크리스|necklace|펜던트|pendant|초커|choker/.test(text)) return "necklace";
-  // bracelet before ring — "링" alone would steal 팔찌 titles incorrectly less often,
-  // but 팔찌/bracelet must win first.
-  if (/팔찌|bracelet|브레이슬릿|bangle|손목|암밴드|armband/.test(text)) return "bracelet";
-  if (/반지|링\b|ring\b|시그넷/.test(text)) return "ring";
+
+  if (/귀걸이|이어링|ear\s*ring|earring|pierce|피어싱|드롭이어/.test(text)) return "earring";
+  if (/목걸이|네크리스|necklace|펜던트|pendant|초커|choker|체인목/.test(text)) return "necklace";
+  if (/팔찌|bracelet|브레이슬릿|bangle|암밴드|armband|러브\s*팔찌|까르띠에.*팔찌/.test(text)) {
+    return "bracelet";
+  }
+  // Ring: explicit words first. Avoid matching 링 inside unrelated words.
+  if (/반지|시그넷|링거|커플링|이터널|solitaire|\bring\b/.test(text)) return "ring";
+  if (/(골드|실버|다이아|플래티넘|화이트골드)?\s*링(?!거)/.test(text) && !/팔찌|bracelet/.test(text)) {
+    return "ring";
+  }
+  // Category-ish tokens
+  if (/finger|손가락/.test(text)) return "ring";
+  if (/wrist|손목/.test(text)) return "bracelet";
+  if (/ear|귀/.test(text) && !/귀금속/.test(text)) return "earring";
+  if (/neck|목\b/.test(text)) return "necklace";
+
   return null;
 }
