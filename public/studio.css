@@ -98,6 +98,8 @@ html, body { margin: 0; min-height: 100%; }
 }
 .studio-stage.mode-result {
   grid-template-columns: 1fr;
+  min-height: 0;
+  height: 100%;
 }
 
 .panel {
@@ -248,6 +250,22 @@ html, body { margin: 0; min-height: 100%; }
 }
 .studio-stage.mode-result .panel-result {
   animation: rise 0.55s var(--ease) both;
+  min-height: 0;
+  height: 100%;
+  flex: 1;
+}
+.studio-stage.mode-result .result-frame {
+  flex: 1;
+  min-height: clamp(280px, 68dvh, 820px);
+  max-height: none;
+  width: 100%;
+}
+.studio-stage.mode-result .result-frame > canvas {
+  width: 100%;
+  height: 100%;
+  min-height: clamp(280px, 68dvh, 820px);
+  max-height: none;
+  object-fit: contain;
 }
 @keyframes rise {
   from { opacity: 0; transform: scale(0.96); }
@@ -270,6 +288,12 @@ html, body { margin: 0; min-height: 100%; }
   .panel-frame > canvas {
     min-height: 120px;
     max-height: 26vh;
+  }
+  .studio-stage.mode-result .result-frame,
+  .studio-stage.mode-result .result-frame > canvas {
+    min-height: clamp(320px, 72dvh, 900px);
+    max-height: none;
+    height: clamp(320px, 72dvh, 900px);
   }
   .capture-toolbar { gap: 4px; }
   .btn, .select { padding: 7px 8px; font-size: 11px; border-radius: 8px; }
