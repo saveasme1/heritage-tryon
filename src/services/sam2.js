@@ -1,38 +1,20 @@
 /**
- * Jewelry cutout — fast path first.
- * Heavy ONNX segmentation is optional and timed out so UI never hangs.
+ * Jewelry cutout — product plate must not survive.
+ * 1) native alpha
+ * 2) @imgly/background-removal (browser)
+ * 3) aggressive flood / chroma if plate remains
  */
 
-const USE_HEAVY_SEG = false; // MVP: avoid multi‑100MB model hang in iframe
-const HEAVY_SEG_MS = 12000;
-
-let segmenter = null;
-let loading = null;
+const HEAVY_MS = 45000;
 
 function withTimeout(promise, ms, label = "timeout") {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(label)), ms);
-    promise.then(
+    Promise.resolve(promise).then(
       (v) => { clearTimeout(t); resolve(v); },
       (e) => { clearTimeout(t); reject(e); }
     );
   });
-}
-
-async function loadSegmenter() {
-  if (segmenter) return segmenter;
-  if (loading) return loading;
-  loading = (async () => {
-    const { pipeline, env } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
-    env.allowLocalModels = false;
-    segmenter = await pipeline("image-segmentation", "Xenova/rmbg-1.4", { quantized: true });
-    return segmenter;
-  })();
-  try {
-    return await loading;
-  } finally {
-    loading = null;
-  }
 }
 
 function loadImage(url) {
@@ -46,7 +28,7 @@ function loadImage(url) {
     try {
       if (/^https?:\/\//i.test(url)) {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 5000);
+        const timer = setTimeout(() => ctrl.abort(), 6000);
         try {
           const res = await fetch(url, { mode: "cors", cache: "no-store", signal: ctrl.signal });
           if (res.ok) {
@@ -62,117 +44,213 @@ function loadImage(url) {
   });
 }
 
+function canvasFromImage(img) {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth || img.width;
+  c.height = img.naturalHeight || img.height;
+  c.getContext("2d").drawImage(img, 0, 0);
+  return c;
+}
+
 function hasTransparency(img) {
   const c = document.createElement("canvas");
-  const w = Math.min(64, img.naturalWidth || img.width);
-  const h = Math.min(64, img.naturalHeight || img.height);
+  const w = Math.min(80, img.naturalWidth || img.width);
+  const h = Math.min(80, img.naturalHeight || img.height);
   if (!w || !h) return false;
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
-  for (let i = 3; i < data.length; i += 4) {
-    if (data[i] < 250) return true;
-  }
-  return false;
+  let clear = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 240) clear++;
+  return clear > (data.length / 4) * 0.08;
 }
 
-function heuristicCutout(img) {
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth || img.width;
-  c.height = img.naturalHeight || img.height;
-  const ctx = c.getContext("2d");
-  ctx.drawImage(img, 0, 0);
-  const imageData = ctx.getImageData(0, 0, c.width, c.height);
-  const d = imageData.data;
-  const samples = [
-    0,
-    (c.width - 1) * 4,
-    (c.height - 1) * c.width * 4,
-    ((c.height - 1) * c.width + (c.width - 1)) * 4,
-  ];
-  let br = 0, bg = 0, bb = 0;
-  samples.forEach((i) => { br += d[i]; bg += d[i + 1]; bb += d[i + 2]; });
-  br /= 4; bg /= 4; bb /= 4;
+function colorDist(r1, g1, b1, r2, g2, b2) {
+  const dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+/** How much of the frame border is still opaque — high = plate leftover. */
+function edgeOpaqueRatio(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const w = canvas.width;
+  const h = canvas.height;
+  const { data } = ctx.getImageData(0, 0, w, h);
+  let edge = 0;
   let opaque = 0;
+  const check = (x, y) => {
+    edge++;
+    if (data[(y * w + x) * 4 + 3] > 20) opaque++;
+  };
+  for (let x = 0; x < w; x++) {
+    check(x, 0);
+    check(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    check(0, y);
+    check(w - 1, y);
+  }
+  return edge ? opaque / edge : 1;
+}
+
+function opaqueStats(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const w = canvas.width;
+  const h = canvas.height;
+  const { data } = ctx.getImageData(0, 0, w, h);
+  let opaque = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] > 12) opaque++;
+  return { opaque, ratio: opaque / (w * h) };
+}
+
+function isCutoutGood(canvas) {
+  const edge = edgeOpaqueRatio(canvas);
+  const { ratio } = opaqueStats(canvas);
+  // Good cutout: few edge pixels left, and not almost-empty / almost-full plate
+  return edge < 0.18 && ratio > 0.02 && ratio < 0.85;
+}
+
+async function imglyCutout(img, onStatus = () => {}) {
+  onStatus("AI 누끼 처리 중… (첫 실행은 모델 다운로드)");
+  const mod = await import("https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm");
+  const removeBackground = mod.removeBackground || mod.default;
+  if (typeof removeBackground !== "function") throw new Error("누끼 모듈 로드 실패");
+  const srcBlob = await new Promise((r) => canvasFromImage(img).toBlob(r, "image/png"));
+  const outBlob = await removeBackground(srcBlob, {
+    output: { format: "image/png", quality: 0.92 },
+    progress: (key, current, total) => {
+      if (total) onStatus(`AI 누끼 ${key}: ${Math.round((current / total) * 100)}%`);
+    },
+  });
+  const url = URL.createObjectURL(outBlob);
+  try {
+    return canvasFromImage(await loadImage(url));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function sampleCornerColors(d, w, h) {
+  const pts = [
+    [2, 2], [w - 3, 2], [2, h - 3], [w - 3, h - 3],
+    [Math.floor(w / 2), 2], [Math.floor(w / 2), h - 3],
+    [2, Math.floor(h / 2)], [w - 3, Math.floor(h / 2)],
+  ];
+  return pts.map(([x, y]) => {
+    const i = (y * w + x) * 4;
+    return [d[i], d[i + 1], d[i + 2]];
+  });
+}
+
+function floodAndChroma(img, thresh = 42) {
+  const c = canvasFromImage(img);
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  const w = c.width;
+  const h = c.height;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  const visited = new Uint8Array(w * h);
+  const corners = sampleCornerColors(d, w, h);
+  const stack = [];
+
+  for (const [sx, sy] of [
+    [0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1],
+    [Math.floor(w / 2), 0], [Math.floor(w / 2), h - 1],
+    [0, Math.floor(h / 2)], [w - 1, Math.floor(h / 2)],
+  ]) {
+    const i = (sy * w + sx) * 4;
+    stack.push([sx, sy, d[i], d[i + 1], d[i + 2]]);
+  }
+
+  while (stack.length) {
+    const [x, y, br, bg, bb] = stack.pop();
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const idx = y * w + x;
+    if (visited[idx]) continue;
+    visited[idx] = 1;
+    const i = idx * 4;
+    if (colorDist(d[i], d[i + 1], d[i + 2], br, bg, bb) > thresh) continue;
+    d[i + 3] = 0;
+    stack.push([x + 1, y, br, bg, bb], [x - 1, y, br, bg, bb], [x, y + 1, br, bg, bb], [x, y - 1, br, bg, bb]);
+  }
+
+  // Kill plate colors similar to any corner sample (beige cards, white studio)
   for (let i = 0; i < d.length; i += 4) {
-    const dr = d[i] - br;
-    const dg = d[i + 1] - bg;
-    const db = d[i + 2] - bb;
-    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-    const nearWhite = d[i] > 242 && d[i + 1] > 242 && d[i + 2] > 242;
-    // Softer threshold — avoid wiping metallic jewelry to nothing.
-    if (dist < 28 || nearWhite) d[i + 3] = 0;
-    else opaque++;
+    if (d[i + 3] === 0) continue;
+    const nearWhite = d[i] > 235 && d[i + 1] > 232 && d[i + 2] > 220;
+    let nearPlate = nearWhite;
+    for (const [cr, cg, cb] of corners) {
+      if (colorDist(d[i], d[i + 1], d[i + 2], cr, cg, cb) < thresh + 8) {
+        nearPlate = true;
+        break;
+      }
+    }
+    if (nearPlate) d[i + 3] = 0;
   }
-  // If cutout destroyed the product, keep the original pixels.
-  if (opaque < (d.length / 4) * 0.02) {
-    ctx.drawImage(img, 0, 0);
-    return c;
-  }
+
   ctx.putImageData(imageData, 0, 0);
   return c;
 }
 
-async function segmentCutout(img) {
-  const model = await loadSegmenter();
-  const result = await model(img);
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth || img.width;
-  c.height = img.naturalHeight || img.height;
-  const ctx = c.getContext("2d");
-  ctx.drawImage(img, 0, 0);
-  const mask = Array.isArray(result) ? result[0] : result;
-  if (mask?.mask?.width && mask.mask.data) {
-    const tmp = document.createElement("canvas");
-    tmp.width = mask.mask.width;
-    tmp.height = mask.mask.height;
-    const id = tmp.getContext("2d").createImageData(mask.mask.width, mask.mask.height);
-    for (let i = 0; i < mask.mask.data.length; i++) {
-      const v = mask.mask.data[i] > 0.5 ? 255 : 0;
-      id.data[i * 4] = 255;
-      id.data[i * 4 + 1] = 255;
-      id.data[i * 4 + 2] = 255;
-      id.data[i * 4 + 3] = v;
-    }
-    tmp.getContext("2d").putImageData(id, 0, 0);
-    const mctx = document.createElement("canvas");
-    mctx.width = c.width;
-    mctx.height = c.height;
-    mctx.getContext("2d").drawImage(tmp, 0, 0, c.width, c.height);
-    ctx.globalCompositeOperation = "destination-in";
-    ctx.drawImage(mctx, 0, 0);
-    ctx.globalCompositeOperation = "source-over";
-  }
-  return c;
+function refineCutout(img, onStatus) {
+  onStatus("상품 배경판 제거 중…");
+  let best = floodAndChroma(img, 36);
+  if (!isCutoutGood(best)) best = floodAndChroma(img, 52);
+  if (!isCutoutGood(best)) best = floodAndChroma(img, 68);
+  return best;
 }
 
-/**
- * Ensure jewelry PNG with transparency. Returns { canvas, blob, method }
- */
-export async function processJewelryImage(url) {
+export async function processJewelryImage(url, onStatus = () => {}) {
   const img = await loadImage(url);
   if (hasTransparency(img)) {
-    const c = document.createElement("canvas");
-    c.width = img.naturalWidth || img.width;
-    c.height = img.naturalHeight || img.height;
-    c.getContext("2d").drawImage(img, 0, 0);
-    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
-    return { canvas: c, blob, method: "native-alpha" };
-  }
-
-  if (USE_HEAVY_SEG) {
-    try {
-      const canvas = await withTimeout(segmentCutout(img), HEAVY_SEG_MS, "배경제거 시간 초과");
-      const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-      return { canvas, blob, method: "onnx-segmentation" };
-    } catch (err) {
-      console.warn("seg failed, heuristic", err);
+    const c = canvasFromImage(img);
+    if (isCutoutGood(c) || edgeOpaqueRatio(c) < 0.25) {
+      const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+      return { canvas: c, blob, method: "native-alpha" };
     }
   }
 
-  const canvas = heuristicCutout(img);
+  let canvas = null;
+  let method = "flood-fill";
+  try {
+    canvas = await withTimeout(imglyCutout(img, onStatus), HEAVY_MS, "AI 누끼 시간 초과");
+    method = "imgly-rembg";
+  } catch (err) {
+    console.warn("imgly rembg failed", err);
+    onStatus("AI 누끼 실패 → 배경판 강제 제거…");
+  }
+
+  if (!canvas || !isCutoutGood(canvas)) {
+    const refined = refineCutout(img, onStatus);
+    // Prefer refined if it clears edges better
+    if (!canvas || edgeOpaqueRatio(refined) < edgeOpaqueRatio(canvas) - 0.05) {
+      canvas = refined;
+      method = "flood-chroma";
+    } else if (!isCutoutGood(canvas)) {
+      // Still plate-like from AI — wipe remaining edge plate colors
+      canvas = refineCutout(await canvasToImage(canvas), onStatus);
+      method = `${method}+refine`;
+    }
+  }
+
+  if (!isCutoutGood(canvas)) {
+    // Last resort: keep center subject by wiping strong edge plate only
+    canvas = floodAndChroma(img, 78);
+    method = "aggressive-chroma";
+  }
+
   const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-  return { canvas, blob, method: "heuristic" };
+  onStatus(`누끼 완료 (${method})`);
+  return { canvas, blob, method };
+}
+
+function canvasToImage(canvas) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = canvas.toDataURL("image/png");
+  });
 }
