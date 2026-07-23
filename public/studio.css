@@ -160,7 +160,6 @@ html, body { margin: 0; min-height: 100%; }
   color: var(--muted);
   padding: 16px;
   pointer-events: none;
-  z-index: 2;
 }
 .empty-state strong {
   color: var(--ink);
@@ -172,104 +171,126 @@ html, body { margin: 0; min-height: 100%; }
   max-width: 22ch;
 }
 
-.capture-frame > img {
-  position: relative;
-  z-index: 1;
-}
-.pose-guide {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  display: grid;
-  place-items: center;
-}
-.pose-guide .guide-svg {
-  width: min(86%, 280px);
-  height: min(92%, 340px);
-  overflow: visible;
-}
-.guide-layer { display: none; }
-.pose-guide[data-type="bracelet"] .guide-layer[data-for="bracelet"],
-.pose-guide[data-type="ring"] .guide-layer[data-for="ring"],
-.pose-guide[data-type="earring"] .guide-layer[data-for="earring"],
-.pose-guide[data-type="necklace"] .guide-layer[data-for="necklace"] {
-  display: block;
-}
-.guide-silhouette {
-  fill: none;
-  stroke: rgba(255, 130, 54, 0.55);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 6 5;
-}
-.guide-silhouette.soft {
-  stroke: rgba(255, 130, 54, 0.35);
-  stroke-width: 1.6;
-}
-.guide-target {
-  fill: rgba(255, 130, 54, 0.12);
-  stroke: var(--accent);
-  stroke-width: 2.4;
-  stroke-dasharray: 5 4;
-  animation: guidePulse 1.6s ease-in-out infinite;
-}
-.guide-target.line {
-  fill: none;
-  stroke-linecap: round;
-}
-.guide-target.dot {
-  fill: rgba(255, 130, 54, 0.35);
-  stroke-dasharray: none;
-}
-.guide-label {
-  fill: rgba(22, 21, 19, 0.72);
-  font-size: 11px;
-  font-weight: 700;
-  text-anchor: middle;
-}
-.capture-frame.has-photo .pose-guide {
-  opacity: 0.42;
-}
-.capture-frame.has-photo .guide-label {
-  opacity: 0;
-}
-@keyframes guidePulse {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; }
-}
-
-.part-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-.part-tab {
-  appearance: none;
-  font: inherit;
-  cursor: pointer;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink);
-  border-radius: 10px;
-  padding: 9px 6px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.part-tab.is-active {
-  background: var(--accent-soft);
-  border-color: rgba(255, 130, 54, 0.45);
-  color: #c45a12;
-  box-shadow: inset 0 0 0 1px rgba(255, 130, 54, 0.2);
-}
-
 .capture-toolbar,
 .result-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+
+/* Fullscreen guided camera (bank KYC style) */
+.camera-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: #0b0b0b;
+  color: #fff;
+}
+.camera-sheet.is-hidden,
+.camera-sheet[hidden] { display: none !important; }
+.camera-top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 12px 8px;
+  padding-top: calc(12px + env(safe-area-inset-top));
+}
+.camera-close {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.18);
+  color: #fff;
+}
+.camera-hint {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.camera-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #111;
+}
+.camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.camera-guide {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+.camera-guide svg {
+  width: min(92vw, 420px);
+  height: min(78dvh, 640px);
+}
+.guide-dim {
+  fill: rgba(0, 0, 0, 0.45);
+}
+.guide-outline { display: none; }
+.camera-guide[data-type="bracelet"] .guide-outline[data-for="bracelet"],
+.camera-guide[data-type="ring"] .guide-outline[data-for="ring"],
+.camera-guide[data-type="earring"] .guide-outline[data-for="earring"],
+.camera-guide[data-type="necklace"] .guide-outline[data-for="necklace"] {
+  display: block;
+}
+.guide-outline .guide-hole {
+  fill: transparent;
+  stroke: #ff8236;
+  stroke-width: 3.5;
+  stroke-dasharray: 10 7;
+  animation: guidePulse 1.5s ease-in-out infinite;
+}
+.guide-outline ellipse:not(.guide-hole),
+.guide-outline circle,
+.guide-outline path {
+  fill: none;
+  stroke: #ff8236;
+  stroke-width: 3;
+  stroke-dasharray: 8 6;
+  animation: guidePulse 1.5s ease-in-out infinite;
+}
+.mask-hole { display: none; }
+.guide-outline text {
+  fill: rgba(255,255,255,0.92);
+  font-size: 13px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.camera-bottom {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 16px 12px calc(18px + env(safe-area-inset-bottom));
+}
+.shutter {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  background: #ff8236;
+  box-shadow: 0 0 0 4px rgba(255,130,54,0.25);
+  cursor: pointer;
+}
+.shutter:active { transform: scale(0.96); }
+.camera-sub {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+}
+@keyframes guidePulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
 }
 .btn,
 .select {
@@ -390,9 +411,8 @@ html, body { margin: 0; min-height: 100%; }
   }
   .capture-toolbar { gap: 4px; }
   .btn, .select { padding: 7px 8px; font-size: 11px; border-radius: 8px; }
-  .part-tab { padding: 8px 4px; font-size: 11px; border-radius: 8px; }
-  .pose-guide .guide-svg { width: min(92%, 220px); height: min(94%, 260px); }
-  .guide-label { font-size: 10px; }
+  .camera-guide svg { width: min(96vw, 360px); height: min(72dvh, 560px); }
+  .guide-outline text { font-size: 12px; }
   .empty-state strong { font-size: 12px; }
   .empty-state span { font-size: 10px; max-width: 14ch; }
   .header-copy h1 { font-size: 15px; }
