@@ -44,6 +44,9 @@ export function guessTypeFromText(title = "", content = "") {
   const text = `${title} ${content}`.toLowerCase();
   if (/귀걸이|이어링|earring|pierce|피어싱/.test(text)) return "earring";
   if (/목걸이|네크리스|necklace|펜던트|pendant|초커|choker/.test(text)) return "necklace";
-  if (/반지|링|ring/.test(text)) return "ring";
+  // bracelet before ring — "링" alone would steal 팔찌 titles incorrectly less often,
+  // but 팔찌/bracelet must win first.
+  if (/팔찌|bracelet|브레이슬릿|bangle|손목|암밴드|armband/.test(text)) return "bracelet";
+  if (/반지|링\b|ring\b|시그넷/.test(text)) return "ring";
   return null;
 }
