@@ -27,9 +27,24 @@ async function loadSegmenter() {
 }
 
 function loadImage(url) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Prefer blob fetch so we avoid crossOrigin/ACAO broken-image cases.
+      if (/^https?:\/\//i.test(url)) {
+        const res = await fetch(url, { mode: "cors", cache: "no-store" });
+        if (res.ok) {
+          const blobUrl = URL.createObjectURL(await res.blob());
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("이미지 로드 실패"));
+          img.src = blobUrl;
+          return;
+        }
+      }
+    } catch (_) {
+      // fall through
+    }
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("이미지 로드 실패"));
     img.src = url;
