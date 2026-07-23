@@ -198,15 +198,14 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
     const vlen = Math.hypot(vx, vy) || 1;
     const ux = vx / vlen;
     const uy = vy / vlen;
-    // Sit clearly on the wrist/forearm, not the knuckle cluster.
+    // Sit on the wrist — small offset past wrist landmark (not mid-forearm).
     targets.bracelet = {
       center: {
-        x: wrist.x + ux * handLen * 0.48,
-        y: wrist.y + uy * handLen * 0.48,
+        x: wrist.x + ux * handLen * 0.16,
+        y: wrist.y + uy * handLen * 0.16,
       },
-      width: Math.max(palmW * 1.75, handLen * 0.55, w * 0.22),
+      width: Math.max(palmW * 1.55, handLen * 0.48, w * 0.2),
       angle: angleDeg(indexMcp, pinkyMcp),
-      // Toward knuckles = visible front of bracelet
       frontAngle: (Math.atan2(midMcp.y - wrist.y, midMcp.x - wrist.x) * 180) / Math.PI,
       points: [wrist, indexMcp, pinkyMcp, midTip],
     };
