@@ -16,6 +16,8 @@ const state = {
   bodyImage: null,
   afterCanvas: null,
   productReady: false,
+  wearType: "bracelet",
+  cameraStream: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -194,35 +196,103 @@ function onPickFile(event) {
   event.target.value = "";
 }
 
-const GUIDE_COPY = {
-  ring: { title: "반지 촬영", hint: "손등을 가이드에 맞추고 반지 손가락을 원에 두세요." },
-  bracelet: { title: "팔찌 촬영", hint: "손목이 가이드 타원에 오도록 팔을 맞춰 주세요." },
-  earring: { title: "귀걸이 촬영", hint: "귀가 보이도록 얼굴을 옆으로 맞춰 주세요." },
-  necklace: { title: "목걸이 촬영", hint: "목·쇄골이 보이도록 상체를 프레임에 맞춰 주세요." },
+const CAMERA_HINT = {
+  ring: "손을 가이드에 맞추고 반지 손가락을 원에 두세요",
+  bracelet: "손목을 타원 가이드에 맞춰 주세요",
+  earring: "얼굴·귀가 가이드 안에 들어오게 맞춰 주세요",
+  necklace: "목·쇄골이 가이드 안에 보이게 맞춰 주세요",
 };
 
-function setPartType(type) {
-  const next = GUIDE_COPY[type] ? type : "bracelet";
-  $("typeHint").value = next;
-  const guide = $("poseGuide");
-  if (guide) guide.dataset.type = next;
-  document.querySelectorAll(".part-tab").forEach((btn) => {
-    const on = btn.dataset.type === next;
-    btn.classList.toggle("is-active", on);
-    btn.setAttribute("aria-selected", on ? "true" : "false");
-  });
-  const copy = GUIDE_COPY[next];
-  if ($("guideTitle")) $("guideTitle").textContent = copy.title;
-  if ($("guideHint")) $("guideHint").textContent = copy.hint;
-  if (!state.bodyImage) {
-    setStatus(`${copy.title}: 가이드에 맞춘 뒤 촬영하거나 업로드하세요.`);
+function resolveType() {
+  return state.wearType || guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
+}
+
+function applyWearTypeFromProduct() {
+  state.wearType = guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
+  const guide = $("cameraGuide");
+  if (guide) guide.dataset.type = state.wearType;
+  if ($("cameraHint")) $("cameraHint").textContent = CAMERA_HINT[state.wearType] || CAMERA_HINT.bracelet;
+}
+
+function stopCamera() {
+  const video = $("cameraVideo");
+  if (state.cameraStream) {
+    state.cameraStream.getTracks().forEach((t) => t.stop());
+    state.cameraStream = null;
+  }
+  if (video) video.srcObject = null;
+}
+
+function closeCameraSheet() {
+  stopCamera();
+  const sheet = $("cameraSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.classList.add("is-hidden");
+  document.body.classList.remove("camera-open");
+}
+
+async function openGuidedCamera() {
+  applyWearTypeFromProduct();
+  const sheet = $("cameraSheet");
+  const video = $("cameraVideo");
+  if (!sheet || !video) return;
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus("이 환경에서는 카메라 가이드 촬영이 불가합니다. 업로드를 이용해 주세요.", "is-err");
+    $("fileInput")?.click();
+    return;
+  }
+
+  sheet.hidden = false;
+  sheet.classList.remove("is-hidden");
+  document.body.classList.add("camera-open");
+  setStatus("카메라 권한을 허용하면 가이드가 표시됩니다…");
+
+  try {
+    stopCamera();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    });
+    state.cameraStream = stream;
+    video.srcObject = stream;
+    await video.play();
+    setStatus(CAMERA_HINT[state.wearType] || "가이드에 맞춘 뒤 촬영하세요.");
+  } catch (err) {
+    console.warn(err);
+    closeCameraSheet();
+    setStatus("카메라 권한이 없어 업로드로 진행합니다.", "is-err");
+    $("fileInput")?.click();
   }
 }
 
-function resolveType() {
-  const hint = $("typeHint").value;
-  if (hint && hint !== "auto") return hint;
-  return guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
+function shutterCapture() {
+  const video = $("cameraVideo");
+  const canvas = $("cameraSnap");
+  if (!video || !canvas || !video.videoWidth) {
+    setStatus("카메라가 아직 준비되지 않았습니다.", "is-err");
+    return;
+  }
+  // Mirror back (preview is mirrored)
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0);
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      setStatus("촬영에 실패했습니다.", "is-err");
+      return;
+    }
+    closeCameraSheet();
+    setBodyFromBlob(blob);
+  }, "image/jpeg", 0.92);
 }
 
 async function runMergeTryOn() {
@@ -326,19 +396,18 @@ function closeStudio() {
   else location.href = "https://hand-made.kr/landing.html?open=portfolio";
 }
 
-$("closeStudio").addEventListener("click", closeStudio);
-$("captureInput").addEventListener("change", onPickFile);
+$("closeStudio").addEventListener("click", () => {
+  closeCameraSheet();
+  closeStudio();
+});
+$("openCamera")?.addEventListener("click", openGuidedCamera);
+$("closeCamera")?.addEventListener("click", closeCameraSheet);
+$("shutterBtn")?.addEventListener("click", shutterCapture);
 $("fileInput").addEventListener("change", onPickFile);
 $("mergeTryOn").addEventListener("click", runMergeTryOn);
 $("resetBtn").addEventListener("click", resetToSplit);
 $("downloadBtn").addEventListener("click", download);
-$("partTabs")?.addEventListener("click", (event) => {
-  const btn = event.target.closest(".part-tab");
-  if (!btn) return;
-  setPartType(btn.dataset.type);
-});
 
 setStageMode("split");
-const guessed = guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
-setPartType(guessed);
+applyWearTypeFromProduct();
 loadProduct();
