@@ -8,7 +8,7 @@
   <base href="./" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon13" />
+  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon14" />
 </head>
 <body class="studio-body">
   <div class="studio-shell">
@@ -75,24 +75,45 @@
       <div id="cameraGuide" class="camera-guide" data-type="bracelet" aria-hidden="true">
         <svg viewBox="0 0 300 480" preserveAspectRatio="xMidYMid meet">
           <rect class="guide-dim" width="300" height="480" />
+          <!-- 팔찌: 팔 폭 실루엣 + 팔찌 링 + 손목 포인트 -->
           <g class="guide-outline" data-for="bracelet">
-            <ellipse class="guide-hole" cx="150" cy="300" rx="78" ry="36" transform="rotate(-20 150 300)" />
-            <text x="150" y="380">손목을 타원에 맞춰 주세요</text>
+            <path class="guide-arm" d="M118 40c22-10 48-8 62 12 10 14 12 34 8 52l-28 250c-3 22-18 36-36 36s-34-14-37-36L64 104c-5-20 0-42 14-54 10-8 24-12 40-10z" />
+            <ellipse class="guide-bracelet" cx="128" cy="292" rx="52" ry="22" transform="rotate(-22 128 292)" />
+            <ellipse class="guide-bracelet-inner" cx="128" cy="292" rx="34" ry="12" transform="rotate(-22 128 292)" />
+            <g class="guide-cross" transform="translate(128 292)">
+              <line x1="-14" y1="0" x2="14" y2="0" />
+              <line x1="0" y1="-14" x2="0" y2="14" />
+              <circle r="5" />
+            </g>
+            <text x="150" y="420">팔 폭에 맞추고 + 에 손목을 두세요</text>
           </g>
           <g class="guide-outline" data-for="ring">
-            <ellipse class="guide-hole" cx="168" cy="250" rx="70" ry="110" transform="rotate(12 168 250)" />
-            <circle cx="190" cy="230" r="16" />
-            <text x="150" y="400">손을 프레임에 · 반지 손가락을 원에</text>
+            <path class="guide-arm" d="M90 70c28-24 72-20 88 14 10 20 6 44-6 62L140 360c-8 28-44 28-52 0L70 150c-10-18-6-44 10-60 8-8 16-12 10-20z" />
+            <circle class="guide-point" cx="176" cy="210" r="18" />
+            <g class="guide-cross" transform="translate(176 210)">
+              <line x1="-10" y1="0" x2="10" y2="0" />
+              <line x1="0" y1="-10" x2="0" y2="10" />
+            </g>
+            <text x="150" y="420">손 실루엣 · 원에 반지 손가락</text>
           </g>
           <g class="guide-outline" data-for="earring">
-            <ellipse class="guide-hole" cx="150" cy="220" rx="88" ry="110" />
-            <ellipse cx="210" cy="230" rx="14" ry="22" />
-            <text x="150" y="370">얼굴·귀가 보이게 맞춰 주세요</text>
+            <ellipse class="guide-face" cx="150" cy="220" rx="86" ry="108" />
+            <ellipse class="guide-point" cx="214" cy="228" rx="12" ry="20" />
+            <g class="guide-cross" transform="translate(214 228)">
+              <line x1="-8" y1="0" x2="8" y2="0" />
+              <line x1="0" y1="-8" x2="0" y2="8" />
+            </g>
+            <text x="150" y="380">얼굴 프레임 · + 에 귀를 맞추세요</text>
           </g>
           <g class="guide-outline" data-for="necklace">
-            <ellipse class="guide-hole" cx="150" cy="210" rx="100" ry="120" />
-            <path d="M70 250c30 50 130 50 160 0" />
-            <text x="150" y="380">목·쇄골이 보이게 맞춰 주세요</text>
+            <path class="guide-arm" d="M78 40c20-18 50-20 72-4 14 10 22 28 20 46l-8 28c34 12 58 42 64 78H74c6-36 30-66 64-78l-8-28c-2-16 4-34 14-42z" />
+            <path class="guide-bracelet" d="M78 210c28 48 116 48 144 0" />
+            <g class="guide-cross" transform="translate(150 248)">
+              <line x1="-12" y1="0" x2="12" y2="0" />
+              <line x1="0" y1="-12" x2="0" y2="12" />
+              <circle r="4" />
+            </g>
+            <text x="150" y="380">상체 가이드 · + 에 목 중앙</text>
           </g>
         </svg>
       </div>
@@ -103,6 +124,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/studio.js?v=20260724-tryon13"></script>
+  <script type="module" src="./src/studio.js?v=20260724-tryon14"></script>
 </body>
 </html>
