@@ -141,9 +141,13 @@ function angleDeg(a, b) {
 }
 
 /**
- * Detect body targets. Returns null target on failure (caller may use fallback).
+ * Detect body targets.
+ * @param {string} preferredType
+ * @param {function} onStatus
+ * @param {{ earSide?: 'left'|'right' }} options
  */
-export async function detectBody(imageElement, preferredType = "auto", onStatus = () => {}) {
+export async function detectBody(imageElement, preferredType = "auto", onStatus = () => {}, options = {}) {
+  const earSide = options.earSide === "left" ? "left" : "right";
   const typeHint = preferredType === "auto" ? "bracelet" : preferredType;
   try {
     await initDetectors(detectorsForType(preferredType === "auto" ? "bracelet" : preferredType), onStatus);
@@ -208,7 +212,17 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
     };
   }
 
-  if (hands[0]?.[13] && hands[0][16]) {
+  if (hands[0]?.[5] && hands[0][8]) {
+    // Index finger (most common ring finger) — MCP→tip
+    const mcp = hands[0][5];
+    const tip = hands[0][8];
+    targets.ring = {
+      center: { x: (mcp.x + tip.x) / 2, y: (mcp.y + tip.y) / 2 },
+      width: dist(mcp, tip) * 0.55,
+      angle: angleDeg(mcp, tip),
+      points: [mcp, tip],
+    };
+  } else if (hands[0]?.[13] && hands[0][16]) {
     const mcp = hands[0][13];
     const tip = hands[0][16];
     targets.ring = {
@@ -223,16 +237,18 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
     const L = avgPoints(faces[0], LEFT_EAR);
     const R = avgPoints(faces[0], RIGHT_EAR);
     const faceW = faces[0][234] && faces[0][454] ? dist(faces[0][234], faces[0][454]) : w * 0.2;
-    if (L) {
-      targets.earring = {
-        center: L,
-        width: faceW * 0.12,
-        angle: 8,
-        side: "left",
-        alt: R ? { center: R, width: faceW * 0.12, angle: -8, side: "right" } : null,
-      };
-    } else if (R) {
-      targets.earring = { center: R, width: faceW * 0.12, angle: -8, side: "right", alt: null };
+    const leftTarget = L
+      ? { center: L, width: faceW * 0.12, angle: 8, side: "left", alt: null }
+      : null;
+    const rightTarget = R
+      ? { center: R, width: faceW * 0.12, angle: -8, side: "right", alt: null }
+      : null;
+    if (earSide === "left") {
+      targets.earring = leftTarget || rightTarget;
+      if (targets.earring && rightTarget) targets.earring.alt = rightTarget;
+    } else {
+      targets.earring = rightTarget || leftTarget;
+      if (targets.earring && leftTarget) targets.earring.alt = leftTarget;
     }
   }
 
