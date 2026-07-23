@@ -1,7 +1,7 @@
 import { prepareJewelry } from "./services/jewelry.js";
 import { detectBody } from "./services/mediapipe.js";
-import { guessTypeFromText } from "./services/portfolio.js";
-import { composeTryOn } from "./services/tryon.js";
+import { assetUrl, guessTypeFromText } from "./services/portfolio.js";
+import { composeTryOn, fallbackTarget } from "./services/tryon.js";
 
 const params = new URLSearchParams(location.search);
 const embedded = params.get("embed") === "1";
@@ -21,6 +21,17 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const show = (el) => el && el.classList.remove("is-hidden");
 const hide = (el) => el && el.classList.add("is-hidden");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms);
+    Promise.resolve(promise).then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
 
 function setStatus(msg, kind = "") {
   const el = $("status");
@@ -164,16 +175,11 @@ function onPickFile(event) {
   event.target.value = "";
 }
 
-async function resolveType(jewelryObjectUrl) {
+function resolveType() {
   const hint = $("typeHint").value;
   if (hint !== "auto") return hint;
-  const fromText = guessTypeFromText(state.item.title, "");
-  if (fromText) return fromText;
-  // Skip heavy CLIP by default — it often hangs in iframe. Manual/텍스트 추정만 사용.
-  return "ring";
+  return guessTypeFromText(state.item.title, "") || "ring";
 }
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function runMergeTryOn() {
   if (!state.bodyImage || !state.productReady) return;
@@ -181,32 +187,61 @@ async function runMergeTryOn() {
   btn.disabled = true;
   setStatus("두 화면을 합치는 중…");
   setStageMode("merging");
-  await sleep(650);
+  await sleep(400);
 
   try {
     setStatus("주얼리 배경 처리 중…");
-    const jewelry = await prepareJewelry({
-      id: state.item.id,
-      cover: state.item.sourceUrl || state.item.cover,
-      title: state.item.title,
-    }, (m) => setStatus(m));
+    const jewelry = await withTimeout(
+      prepareJewelry({
+        id: state.item.id,
+        cover: state.item.sourceUrl || state.item.cover,
+        title: state.item.title,
+      }, (m) => setStatus(m)),
+      20000,
+      "주얼리 전처리 시간 초과"
+    );
 
-    const type = await resolveType(jewelry.objectUrl);
+    const type = resolveType();
     setStatus("신체 인식 준비 중…");
-    const detection = await detectBody(state.bodyImage, type, (m) => setStatus(m));
-    if (!detection.target) {
-      throw new Error("손·귀·목을 찾지 못했습니다. 부위가 잘 보이게 다시 촬영해 주세요.");
+    let detection;
+    try {
+      detection = await withTimeout(
+        detectBody(state.bodyImage, type, (m) => setStatus(m)),
+        45000,
+        "신체 인식 시간 초과"
+      );
+    } catch (err) {
+      console.warn(err);
+      detection = { type, target: null };
     }
-    const typeLabel = { ring: "반지", earring: "귀걸이", necklace: "목걸이" }[detection.type] || detection.type;
-    setStatus(`${typeLabel} 위치에 합성 중…`);
-    const after = await composeTryOn(state.bodyImage, jewelry.canvas, detection.target, detection.type);
+
+    const useType = detection.type || type;
+    const target = detection.target || fallbackTarget(state.bodyImage, useType);
+    const usedFallback = !detection.target;
+    if (usedFallback) {
+      setStatus("인식이 어려워 기본 위치로 합성합니다…");
+    } else {
+      const typeLabel = { ring: "반지", earring: "귀걸이", necklace: "목걸이" }[useType] || useType;
+      setStatus(`${typeLabel} 위치에 합성 중…`);
+    }
+
+    const after = await withTimeout(
+      composeTryOn(state.bodyImage, jewelry.canvas, target, useType),
+      15000,
+      "합성 시간 초과"
+    );
     state.afterCanvas = after;
     const canvas = $("resultCanvas");
     canvas.width = after.width;
     canvas.height = after.height;
     canvas.getContext("2d").drawImage(after, 0, 0);
     setStageMode("result");
-    setStatus("착용 미리보기입니다. 저장하거나 초기화할 수 있습니다.", "is-ok");
+    setStatus(
+      usedFallback
+        ? "기본 위치 미리보기입니다. 부위 선택 후 다시 시도하거나 저장하세요."
+        : "착용 미리보기입니다. 저장하거나 초기화할 수 있습니다.",
+      "is-ok"
+    );
   } catch (err) {
     console.error(err);
     setStageMode("split");
