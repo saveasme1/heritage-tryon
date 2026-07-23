@@ -202,6 +202,8 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
       },
       width: Math.max(palmW * 1.75, handLen * 0.55, w * 0.22),
       angle: angleDeg(indexMcp, pinkyMcp),
+      // Toward knuckles = visible front of bracelet
+      frontAngle: (Math.atan2(midMcp.y - wrist.y, midMcp.x - wrist.x) * 180) / Math.PI,
       points: [wrist, indexMcp, pinkyMcp, midTip],
     };
   }
