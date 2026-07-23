@@ -196,7 +196,7 @@ function onPickFile(event) {
 function resolveType() {
   const hint = $("typeHint").value;
   if (hint !== "auto") return hint;
-  return guessTypeFromText(state.item.title, "") || "ring";
+  return guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
 }
 
 async function runMergeTryOn() {
@@ -239,7 +239,7 @@ async function runMergeTryOn() {
     if (usedFallback) {
       setStatus("인식이 어려워 기본 위치로 합성합니다…");
     } else {
-      const typeLabel = { ring: "반지", earring: "귀걸이", necklace: "목걸이" }[useType] || useType;
+      const typeLabel = { ring: "반지", bracelet: "팔찌", earring: "귀걸이", necklace: "목걸이" }[useType] || useType;
       setStatus(`${typeLabel} 위치에 합성 중…`);
     }
 
