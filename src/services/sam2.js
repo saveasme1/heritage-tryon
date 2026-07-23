@@ -95,14 +95,21 @@ function heuristicCutout(img) {
   let br = 0, bg = 0, bb = 0;
   samples.forEach((i) => { br += d[i]; bg += d[i + 1]; bb += d[i + 2]; });
   br /= 4; bg /= 4; bb /= 4;
+  let opaque = 0;
   for (let i = 0; i < d.length; i += 4) {
     const dr = d[i] - br;
     const dg = d[i + 1] - bg;
     const db = d[i + 2] - bb;
     const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-    // Near-white / corner-similar background → transparent
-    const nearWhite = d[i] > 235 && d[i + 1] > 235 && d[i + 2] > 235;
-    if (dist < 42 || nearWhite) d[i + 3] = 0;
+    const nearWhite = d[i] > 242 && d[i + 1] > 242 && d[i + 2] > 242;
+    // Softer threshold — avoid wiping metallic jewelry to nothing.
+    if (dist < 28 || nearWhite) d[i + 3] = 0;
+    else opaque++;
+  }
+  // If cutout destroyed the product, keep the original pixels.
+  if (opaque < (d.length / 4) * 0.02) {
+    ctx.drawImage(img, 0, 0);
+    return c;
   }
   ctx.putImageData(imageData, 0, 0);
   return c;
