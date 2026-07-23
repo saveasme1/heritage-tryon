@@ -1,6 +1,5 @@
 /**
  * Canvas-only jewelry placement (scale, rotate, soft shadow, alpha blend).
- * OpenCV.js removed — docs.opencv.org often never loads and used to hang forever.
  */
 
 function canvasFromImage(img) {
@@ -29,7 +28,6 @@ function jewelryBounds(canvas) {
     }
   }
   if (!found) return { x: 0, y: 0, w: width, h: height };
-  // expand one step for sampling skip
   minX = Math.max(0, minX - step);
   minY = Math.max(0, minY - step);
   maxX = Math.min(width - 1, maxX + step);
@@ -37,11 +35,18 @@ function jewelryBounds(canvas) {
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
+function minWidthForType(outW, type) {
+  if (type === "bracelet") return outW * 0.28;
+  if (type === "necklace") return outW * 0.22;
+  if (type === "earring") return outW * 0.07;
+  return outW * 0.09; // ring
+}
+
 /**
  * @param {HTMLImageElement|HTMLCanvasElement} bodyImg
  * @param {HTMLCanvasElement} jewelryCanvas
  * @param {{ center:{x,y}, width:number, angle:number, alt?: any }} target
- * @param {string} type ring|earring|necklace
+ * @param {string} type ring|bracelet|earring|necklace
  */
 export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring") {
   const bodyCanvas = bodyImg instanceof HTMLCanvasElement ? bodyImg : canvasFromImage(bodyImg);
@@ -63,26 +68,33 @@ export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring"
 
   const placeOne = (t) => {
     if (!t?.center) return;
-    const targetW = Math.max(8, t.width || out.width * 0.12);
-    const scale = targetW / Math.max(bounds.w, 1);
-    let targetH = bounds.h * scale;
-    if (type === "necklace") targetH = bounds.h * scale * 0.85;
+    let targetW = Math.max(8, t.width || out.width * 0.12);
+    targetW = Math.max(targetW, minWidthForType(out.width, type));
+
+    const aspect = crop.height / Math.max(crop.width, 1);
+    let targetH = targetW * aspect;
+    if (type === "bracelet") {
+      // Wrist band: keep it wide, not a tiny finger ring.
+      targetH = Math.min(targetH, targetW * 0.55);
+      targetH = Math.max(targetH, targetW * 0.22);
+    }
+    if (type === "necklace") targetH = targetW * aspect * 0.9;
 
     const angle = t.angle || 0;
     const rad = (angle * Math.PI) / 180;
 
     octx.save();
-    octx.translate(t.center.x + targetW * 0.04, t.center.y + targetH * 0.06);
+    octx.translate(t.center.x + targetW * 0.03, t.center.y + targetH * 0.05);
     octx.rotate(rad);
-    octx.globalAlpha = 0.28;
-    octx.filter = "blur(4px)";
+    octx.globalAlpha = 0.25;
+    octx.filter = "blur(5px)";
     octx.drawImage(crop, -targetW / 2, -targetH / 2, targetW, targetH);
     octx.restore();
 
     octx.save();
     octx.translate(t.center.x, t.center.y);
     octx.rotate(rad);
-    octx.globalAlpha = 0.96;
+    octx.globalAlpha = 1;
     octx.imageSmoothingEnabled = true;
     octx.imageSmoothingQuality = "high";
     octx.filter = "none";
@@ -104,15 +116,24 @@ export function drawBefore(canvas, image) {
   canvas.getContext("2d").drawImage(image, 0, 0, w, h);
 }
 
-/** Center fallback when MediaPipe fails — still produces a preview. */
+/** Fallback when MediaPipe fails. */
 export function fallbackTarget(bodyImg, type = "ring") {
   const w = bodyImg.naturalWidth || bodyImg.width || 1;
   const h = bodyImg.naturalHeight || bodyImg.height || 1;
   if (type === "earring") {
-    return { center: { x: w * 0.28, y: h * 0.38 }, width: w * 0.08, angle: 8, alt: { center: { x: w * 0.72, y: h * 0.38 }, width: w * 0.08, angle: -8 } };
+    return {
+      center: { x: w * 0.28, y: h * 0.38 },
+      width: w * 0.08,
+      angle: 8,
+      alt: { center: { x: w * 0.72, y: h * 0.38 }, width: w * 0.08, angle: -8 },
+    };
   }
   if (type === "necklace") {
     return { center: { x: w * 0.5, y: h * 0.42 }, width: w * 0.28, angle: 0 };
   }
-  return { center: { x: w * 0.55, y: h * 0.55 }, width: w * 0.12, angle: -20 };
+  if (type === "bracelet") {
+    // Wrist-ish zone for typical forearm/hand photos
+    return { center: { x: w * 0.42, y: h * 0.55 }, width: w * 0.32, angle: -35 };
+  }
+  return { center: { x: w * 0.55, y: h * 0.45 }, width: w * 0.1, angle: -20 };
 }
