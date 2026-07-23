@@ -1,29 +1,14 @@
-/** Jewelry prepare pipeline: cache + SAM/seg cutout. */
+/** Jewelry prepare — never blocks forever. */
 
 import { processJewelryImage } from "./sam2.js";
 import { getProcessed, putProcessed } from "./storage.js";
 import { assetUrl } from "./portfolio.js";
 
-export async function prepareJewelry(item, onStatus = () => {}) {
-  const cached = await getProcessed(item.id);
-  if (cached?.blob) {
-    const url = URL.createObjectURL(cached.blob);
-    const img = await load(url);
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    canvas.getContext("2d").drawImage(img, 0, 0);
-    onStatus(`캐시된 투명 PNG 사용 (${cached.meta?.method || "cache"})`);
-    return { canvas, blob: cached.blob, method: cached.meta?.method || "cache", objectUrl: url };
-  }
-
-  onStatus("주얼리 배경 제거 중… (ONNX)");
-  const src = assetUrl(item.cover);
-  const { canvas, blob, method, error } = await processJewelryImage(src);
-  await putProcessed(item.id, blob, { method, error: error || null, source: item.cover });
-  const objectUrl = URL.createObjectURL(blob);
-  onStatus(`배경제거 완료: ${method}`);
-  return { canvas, blob, method, objectUrl };
+function resolveSrc(cover) {
+  const v = String(cover || "").trim();
+  if (!v) return "";
+  if (/^(https?:|blob:|data:)/i.test(v)) return v;
+  return assetUrl(v);
 }
 
 function load(url) {
@@ -33,4 +18,33 @@ function load(url) {
     img.onerror = reject;
     img.src = url;
   });
+}
+
+export async function prepareJewelry(item, onStatus = () => {}) {
+  try {
+    const cached = await getProcessed(item.id);
+    if (cached?.blob) {
+      const url = URL.createObjectURL(cached.blob);
+      const img = await load(url);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext("2d").drawImage(img, 0, 0);
+      onStatus(`캐시된 투명 PNG 사용 (${cached.meta?.method || "cache"})`);
+      return { canvas, blob: cached.blob, method: cached.meta?.method || "cache", objectUrl: url };
+    }
+  } catch (_) {
+    // ignore cache errors
+  }
+
+  onStatus("주얼리 배경 처리 중…");
+  const src = resolveSrc(item.cover);
+  if (!src) throw new Error("주얼리 이미지 경로가 없습니다.");
+  const { canvas, blob, method, error } = await processJewelryImage(src);
+  try {
+    await putProcessed(item.id, blob, { method, error: error || null, source: item.cover });
+  } catch (_) {}
+  const objectUrl = URL.createObjectURL(blob);
+  onStatus(`배경 처리 완료 (${method})`);
+  return { canvas, blob, method, objectUrl };
 }
