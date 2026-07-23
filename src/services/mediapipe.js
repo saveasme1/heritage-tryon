@@ -1,115 +1,118 @@
 /**
- * MediaPipe detectors — CPU first, load only what we need, with timeouts.
+ * MediaPipe detectors — optional. Fail fast; never hang the UI.
  */
 
-import {
-  FilesetResolver,
-  HandLandmarker,
-  FaceLandmarker,
-  PoseLandmarker,
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const ESM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
 
 let vision = null;
+let visionMod = null;
 let hand = null;
 let face = null;
 let pose = null;
+let visionFailed = false;
 
 function withTimeout(promise, ms, label) {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(label)), ms);
-    promise.then(
+    Promise.resolve(promise).then(
       (v) => { clearTimeout(t); resolve(v); },
       (e) => { clearTimeout(t); reject(e); }
     );
   });
 }
 
-async function ensureVision() {
-  if (vision) return vision;
-  vision = await withTimeout(
-    FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-    ),
-    20000,
-    "MediaPipe WASM 로딩 시간 초과"
-  );
-  return vision;
+async function loadVisionModule() {
+  return withTimeout(import(ESM_URL), 12000, "MediaPipe 스크립트 로딩 초과");
 }
 
-async function createWithDelegate(factory, options, label) {
-  // Prefer CPU in iframe — GPU often hangs/fails silently.
-  const base = options.baseOptions || {};
-  try {
-    return await withTimeout(
-      factory({
-        ...options,
-        baseOptions: { ...base, delegate: "CPU" },
-      }),
-      25000,
-      `${label} CPU 로딩 초과`
-    );
-  } catch (err) {
-    console.warn(label, "CPU failed, try GPU", err);
-    return await withTimeout(
-      factory({
-        ...options,
-        baseOptions: { ...base, delegate: "GPU" },
-      }),
-      25000,
-      `${label} GPU 로딩 초과`
-    );
-  }
-}
-
-export async function initDetectors(needed = ["hand", "face", "pose"], onStatus = () => {}) {
+async function ensureVision(onStatus) {
+  if (visionFailed) throw new Error("MediaPipe 사용 불가");
+  if (vision && visionMod) return { vision, mod: visionMod };
   onStatus("신체 인식 엔진 준비 중…");
-  const v = await ensureVision();
-  const need = new Set(needed);
+  const mod = await loadVisionModule();
+  visionMod = mod;
+  vision = await withTimeout(
+    mod.FilesetResolver.forVisionTasks(WASM_URL),
+    15000,
+    "MediaPipe WASM 로딩 초과"
+  );
+  return { vision, mod };
+}
 
-  if (need.has("hand") && !hand) {
-    onStatus("손 인식 모델 로딩…");
-    hand = await createWithDelegate(
-      (opts) => HandLandmarker.createFromOptions(v, opts),
-      {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+async function createCpu(factory, options, label) {
+  return withTimeout(
+    factory({
+      ...options,
+      baseOptions: { ...(options.baseOptions || {}), delegate: "CPU" },
+    }),
+    18000,
+    `${label} 로딩 초과`
+  );
+}
+
+function detectorsForType(type) {
+  if (type === "ring") return ["hand"];
+  if (type === "earring") return ["face"];
+  if (type === "necklace") return ["pose"];
+  return ["hand"];
+}
+
+export async function initDetectors(needed = ["hand"], onStatus = () => {}) {
+  const need = new Set(needed);
+  try {
+    const { vision: v, mod } = await ensureVision(onStatus);
+    const { HandLandmarker, FaceLandmarker, PoseLandmarker } = mod;
+
+    if (need.has("hand") && !hand) {
+      onStatus("손 인식 모델 로딩…");
+      hand = await createCpu(
+        (opts) => HandLandmarker.createFromOptions(v, opts),
+        {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          },
+          numHands: 2,
+          runningMode: "IMAGE",
         },
-        numHands: 2,
-        runningMode: "IMAGE",
-      },
-      "손 인식"
-    );
-  }
-  if (need.has("face") && !face) {
-    onStatus("얼굴/귀 인식 모델 로딩…");
-    face = await createWithDelegate(
-      (opts) => FaceLandmarker.createFromOptions(v, opts),
-      {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        "손 인식"
+      );
+    }
+    if (need.has("face") && !face) {
+      onStatus("얼굴/귀 인식 모델 로딩…");
+      face = await createCpu(
+        (opts) => FaceLandmarker.createFromOptions(v, opts),
+        {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          },
+          runningMode: "IMAGE",
+          numFaces: 1,
         },
-        runningMode: "IMAGE",
-        numFaces: 1,
-      },
-      "얼굴 인식"
-    );
-  }
-  if (need.has("pose") && !pose) {
-    onStatus("목/상체 인식 모델 로딩…");
-    pose = await createWithDelegate(
-      (opts) => PoseLandmarker.createFromOptions(v, opts),
-      {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        "얼굴 인식"
+      );
+    }
+    if (need.has("pose") && !pose) {
+      onStatus("목/상체 인식 모델 로딩…");
+      pose = await createCpu(
+        (opts) => PoseLandmarker.createFromOptions(v, opts),
+        {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+          },
+          runningMode: "IMAGE",
+          numPoses: 1,
         },
-        runningMode: "IMAGE",
-        numPoses: 1,
-      },
-      "포즈 인식"
-    );
+        "포즈 인식"
+      );
+    }
+  } catch (err) {
+    console.warn("initDetectors failed", err);
+    visionFailed = true;
+    throw err;
   }
   return { hand, face, pose };
 }
@@ -137,23 +140,20 @@ function angleDeg(a, b) {
   return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
 }
 
-function detectorsForType(type) {
-  if (type === "ring") return ["hand"];
-  if (type === "earring") return ["face"];
-  if (type === "necklace") return ["pose"];
-  return ["hand", "face", "pose"];
-}
-
 /**
- * Detect body targets for jewelry placement.
+ * Detect body targets. Returns null target on failure (caller may use fallback).
  */
 export async function detectBody(imageElement, preferredType = "auto", onStatus = () => {}) {
   const typeHint = preferredType === "auto" ? "ring" : preferredType;
-  await initDetectors(detectorsForType(preferredType === "auto" ? "auto" : preferredType), onStatus);
+  try {
+    await initDetectors(detectorsForType(preferredType === "auto" ? "ring" : preferredType), onStatus);
+  } catch (err) {
+    onStatus("신체 인식을 건너뛰고 기본 위치로 합성합니다…");
+    return { type: typeHint, target: null, allTargets: {}, debug: { error: String(err.message || err) } };
+  }
 
   const w = imageElement.naturalWidth || imageElement.width;
   const h = imageElement.naturalHeight || imageElement.height;
-
   onStatus("사진에서 착용 위치 찾는 중…");
 
   const targets = { ring: null, earring: null, necklace: null };
@@ -221,36 +221,17 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
     };
   }
 
-  let resolvedType = preferredType;
+  let resolvedType = preferredType === "auto" ? typeHint : preferredType;
   if (preferredType === "auto") {
     if (targets.ring) resolvedType = "ring";
     else if (targets.earring) resolvedType = "earring";
     else if (targets.necklace) resolvedType = "necklace";
-    else resolvedType = typeHint;
   }
 
   return {
     type: resolvedType,
-    target: targets[resolvedType],
+    target: targets[resolvedType] || null,
     allTargets: targets,
     debug: { hands: hands.length, faces: faces.length, poses: poses.length, size: { w, h } },
   };
-}
-
-export function drawDebug(canvas, image, detection) {
-  const ctx = canvas.getContext("2d");
-  const w = image.naturalWidth || image.width;
-  const h = image.naturalHeight || image.height;
-  canvas.width = w;
-  canvas.height = h;
-  ctx.drawImage(image, 0, 0, w, h);
-  const t = detection.target;
-  if (!t) return;
-  ctx.strokeStyle = "#ff8236";
-  ctx.fillStyle = "rgba(255,130,54,.28)";
-  ctx.lineWidth = Math.max(2, w * 0.003);
-  ctx.beginPath();
-  ctx.arc(t.center.x, t.center.y, Math.max(8, t.width * 0.35), 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
 }
