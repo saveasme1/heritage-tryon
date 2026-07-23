@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -84,3 +85,90 @@
   <script type="module" src="./src/studio.js?v=20260724-tryon4"></script>
 </body>
 </html>
+=======
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>헤리티지 · 착용해보기</title>
+  <base href="./" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon5" />
+</head>
+<body class="studio-body">
+  <div class="studio-shell">
+    <header class="studio-header">
+      <button type="button" id="closeStudio" class="icon-btn">닫기</button>
+      <div class="header-copy">
+        <p class="eyebrow">착용해보기</p>
+        <h1 id="productTitle">제품</h1>
+      </div>
+      <span id="productCat" class="chip is-hidden"></span>
+    </header>
+
+    <main id="studioStage" class="studio-stage mode-split">
+      <section id="panelProduct" class="panel panel-product">
+        <div class="panel-head">
+          <h2>선택 제품</h2>
+        </div>
+        <div class="panel-frame">
+          <img id="productImage" class="is-hidden" alt="" decoding="async" />
+          <div id="productSkeleton" class="skeleton" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section id="panelCapture" class="panel panel-capture">
+        <div class="panel-head">
+          <h2>내 사진</h2>
+        </div>
+        <div class="panel-frame capture-frame">
+          <img id="bodyPreview" class="is-hidden" alt="" />
+          <div id="captureEmpty" class="empty-state">
+            <strong>사진 준비</strong>
+            <span>손·귀·목이 보이게 촬영하거나 업로드하세요.</span>
+          </div>
+        </div>
+        <div class="capture-toolbar">
+          <label class="btn btn-accent file-btn">촬영
+            <input id="captureInput" type="file" accept="image/*" capture="environment" hidden />
+          </label>
+          <label class="btn btn-ghost file-btn">업로드
+            <input id="fileInput" type="file" accept="image/*" hidden />
+          </label>
+          <select id="typeHint" class="select" aria-label="착용 부위">
+            <option value="auto">자동</option>
+            <option value="ring">손가락</option>
+            <option value="earring">귀</option>
+            <option value="necklace">목</option>
+          </select>
+        </div>
+      </section>
+
+      <section id="panelResult" class="panel panel-result is-hidden">
+        <div class="panel-head">
+          <h2>착용 미리보기</h2>
+        </div>
+        <div class="panel-frame result-frame">
+          <canvas id="resultCanvas"></canvas>
+        </div>
+        <div class="result-toolbar">
+          <button type="button" id="downloadBtn" class="btn btn-accent">저장</button>
+          <button type="button" id="resetBtn" class="btn">초기화</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="studio-footer">
+      <p id="status" class="status" role="status">제품 이미지를 불러오는 중…</p>
+      <button type="button" id="mergeTryOn" class="cta" disabled>착용해보기</button>
+    </footer>
+  </div>
+
+  <script src="https://docs.opencv.org/4.x/opencv.js" async></script>
+  <script type="module" src="./src/studio.js?v=20260724-tryon5"></script>
+</body>
+</html>
+>>>>>>> f255928 (Simplify capture to native shoot/upload only.)
