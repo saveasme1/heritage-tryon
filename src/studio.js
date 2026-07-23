@@ -64,47 +64,63 @@ function refreshReady() {
 }
 
 function imageCandidates(raw) {
-  const value = String(raw || "").trim();
+  let value = String(raw || "").trim();
   if (!value) return [];
+  try { value = decodeURIComponent(value); } catch (_) {}
+
   const list = [];
   const push = (u) => { if (u && !list.includes(u)) list.push(u); };
+  const onGithubHost = /github\.io$/i.test(location.hostname);
+
+  const pushMirrors = (path) => {
+    const p = String(path || "").replace(/^\/+/, "");
+    if (!p) return;
+    // Studio runs on github.io — prefer same-origin first (faster, fewer hangs).
+    if (onGithubHost) {
+      push(`${location.origin}/${p}`);
+      push(`https://saveasme1.github.io/${p}`);
+      push(`https://hand-made.kr/${p}`);
+    } else {
+      push(`https://hand-made.kr/${p}`);
+      push(`https://saveasme1.github.io/${p}`);
+      push(assetUrl(p));
+    }
+  };
+
   if (/^https?:\/\//i.test(value)) {
-    push(value);
     try {
       const u = new URL(value);
-      const path = u.pathname.replace(/^\/+/, "");
-      push(`https://hand-made.kr/${path}`);
-      push(`https://saveasme1.github.io/${path}`);
-      push(assetUrl(path));
-    } catch (_) {}
+      pushMirrors(u.pathname);
+      push(value);
+    } catch (_) {
+      push(value);
+    }
   } else {
-    const path = value.replace(/^\/+/, "");
-    push(assetUrl(path));
-    push(`https://hand-made.kr/${path}`);
-    push(`https://saveasme1.github.io/${path}`);
+    pushMirrors(value);
   }
   return list;
 }
 
-function loadImageNoCors(url) {
+/** Never hang: onload / onerror / timeout only. */
+function loadIntoProductImg(url, ms = 4500) {
+  const img = $("productImage");
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("load failed"));
-    img.src = url;
+    let done = false;
+    const finish = (ok, err) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      img.onload = null;
+      img.onerror = null;
+      ok ? resolve(url) : reject(err || new Error("load failed"));
+    };
+    const timer = setTimeout(() => finish(false, new Error("이미지 로딩 시간 초과")), ms);
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false, new Error("load failed"));
+    // cache-bust soft stalls without breaking CDN cache forever
+    const sep = url.includes("?") ? "&" : "?";
+    img.src = `${url}${sep}_tryon=${Date.now()}`;
   });
-}
-
-async function fetchAsObjectUrl(url, ms = 3500) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const res = await fetch(url, { mode: "cors", cache: "no-store", signal: ctrl.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return URL.createObjectURL(await res.blob());
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 async function loadProduct() {
@@ -120,6 +136,7 @@ async function loadProduct() {
   img.removeAttribute("src");
   img.alt = "";
   show(skeleton);
+  setStatus("선택 제품 불러오는 중…");
 
   const candidates = imageCandidates(state.item.cover);
   if (!candidates.length) {
@@ -131,7 +148,8 @@ async function loadProduct() {
   let lastErr;
   for (const url of candidates) {
     try {
-      await loadImageNoCors(url);
+      await loadIntoProductImg(url, 4500);
+      // Drop cache-bust query for jewelry source (store clean URL)
       img.src = url;
       img.alt = state.item.title || "선택 제품";
       show(img);
@@ -139,7 +157,6 @@ async function loadProduct() {
       state.productReady = true;
       state.item.sourceUrl = url;
       state.item.cover = url;
-      fetchAsObjectUrl(url).then((blobUrl) => { state.item.cover = blobUrl; }).catch(() => {});
       setStatus("제품을 확인한 뒤 사진을 준비하세요.");
       refreshReady();
       return;
@@ -148,6 +165,7 @@ async function loadProduct() {
     }
   }
   hide(skeleton);
+  hide(img);
   setStatus(`제품 이미지를 불러오지 못했습니다. ${lastErr?.message || ""}`.trim(), "is-err");
 }
 
