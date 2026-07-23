@@ -8,7 +8,7 @@
   <base href="./" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon14" />
+  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon15" />
 </head>
 <body class="studio-body">
   <div class="studio-shell">
@@ -31,12 +31,15 @@
       </section>
 
       <section id="panelCapture" class="panel panel-capture">
-        <div class="panel-head"><h2>내 사진</h2></div>
+        <div class="panel-head">
+          <h2>내 사진</h2>
+          <span id="wearTypeChip" class="wear-chip">자동</span>
+        </div>
         <div class="panel-frame capture-frame" id="captureFrame">
           <img id="bodyPreview" class="is-hidden" alt="" />
           <div id="captureEmpty" class="empty-state">
             <strong>사진 준비</strong>
-            <span>촬영을 누르면 가이드가 있는 카메라가 열립니다.</span>
+            <span>촬영을 누르면 제품에 맞는 가이드 카메라가 열립니다.</span>
           </div>
         </div>
         <div class="capture-toolbar">
@@ -63,67 +66,90 @@
     </footer>
   </div>
 
-  <!-- Bank/KYC style guided camera (not part buttons) -->
   <div id="cameraSheet" class="camera-sheet is-hidden" hidden>
     <div class="camera-top">
       <button type="button" id="closeCamera" class="icon-btn camera-close">닫기</button>
       <p id="cameraHint" class="camera-hint">가이드에 맞춰 주세요</p>
     </div>
+    <div id="earSideBar" class="ear-side-bar is-hidden" hidden>
+      <button type="button" class="ear-side-btn is-active" data-ear="right">오른쪽 귀</button>
+      <button type="button" class="ear-side-btn" data-ear="left">왼쪽 귀</button>
+    </div>
     <div class="camera-stage">
       <video id="cameraVideo" class="camera-video" playsinline muted autoplay></video>
       <canvas id="cameraSnap" class="is-hidden"></canvas>
-      <div id="cameraGuide" class="camera-guide" data-type="bracelet" aria-hidden="true">
+      <div id="cameraGuide" class="camera-guide" data-type="bracelet" data-ear="right" aria-hidden="true">
         <svg viewBox="0 0 300 480" preserveAspectRatio="xMidYMid meet">
           <rect class="guide-dim" width="300" height="480" />
-          <!-- 팔찌: 팔 폭 실루엣 + 팔찌 링 + 손목 포인트 -->
+
+          <!-- 팔찌: 손(위) → 손목(+) → 팔뚝(아래) -->
           <g class="guide-outline" data-for="bracelet">
-            <path class="guide-arm" d="M118 40c22-10 48-8 62 12 10 14 12 34 8 52l-28 250c-3 22-18 36-36 36s-34-14-37-36L64 104c-5-20 0-42 14-54 10-8 24-12 40-10z" />
-            <ellipse class="guide-bracelet" cx="128" cy="292" rx="52" ry="22" transform="rotate(-22 128 292)" />
-            <ellipse class="guide-bracelet-inner" cx="128" cy="292" rx="34" ry="12" transform="rotate(-22 128 292)" />
-            <g class="guide-cross" transform="translate(128 292)">
-              <line x1="-14" y1="0" x2="14" y2="0" />
-              <line x1="0" y1="-14" x2="0" y2="14" />
+            <path class="guide-arm" d="M100 48c10-26 48-40 78-22 24 14 34 42 28 68l-8 34c40 12 60 46 54 84l-20 168c-4 30-30 52-60 52s-56-22-60-52l-20-168c-6-38 14-72 54-84l-8-34c-6-26 4-52 22-66z" />
+            <ellipse class="guide-bracelet" cx="150" cy="168" rx="60" ry="25" />
+            <ellipse class="guide-bracelet-inner" cx="150" cy="168" rx="40" ry="15" />
+            <g class="guide-cross" transform="translate(150 168)">
+              <line x1="-16" y1="0" x2="16" y2="0" />
+              <line x1="0" y1="-16" x2="0" y2="16" />
               <circle r="5" />
             </g>
-            <text x="150" y="420">팔 폭에 맞추고 + 에 손목을 두세요</text>
+            <text x="150" y="435">손↑  ·  +손목  ·  팔뚝↓</text>
           </g>
+
+          <!-- 반지: 손바닥 아래, 손가락 위, 검지(+) -->
           <g class="guide-outline" data-for="ring">
-            <path class="guide-arm" d="M90 70c28-24 72-20 88 14 10 20 6 44-6 62L140 360c-8 28-44 28-52 0L70 150c-10-18-6-44 10-60 8-8 16-12 10-20z" />
-            <circle class="guide-point" cx="176" cy="210" r="18" />
-            <g class="guide-cross" transform="translate(176 210)">
-              <line x1="-10" y1="0" x2="10" y2="0" />
-              <line x1="0" y1="-10" x2="0" y2="10" />
+            <path class="guide-arm" d="M110 400c-18-8-32-36-26-64l20-140c6-22 24-36 46-34 40 4 66 34 60 72l-16 140c-4 28-28 46-50 46s-38-14-34-40z" />
+            <path class="guide-fingers" d="M138 160v-78m16 78v-88m16 88v-78m16 78v-68" />
+            <circle class="guide-point" cx="170" cy="72" r="17" />
+            <g class="guide-cross" transform="translate(170 72)">
+              <line x1="-11" y1="0" x2="11" y2="0" />
+              <line x1="0" y1="-11" x2="0" y2="11" />
             </g>
-            <text x="150" y="420">손 실루엣 · 원에 반지 손가락</text>
+            <text x="150" y="435">손가락↑ · 검지(+)에 맞추세요</text>
           </g>
-          <g class="guide-outline" data-for="earring">
-            <ellipse class="guide-face" cx="150" cy="220" rx="86" ry="108" />
-            <ellipse class="guide-point" cx="214" cy="228" rx="12" ry="20" />
-            <g class="guide-cross" transform="translate(214 228)">
-              <line x1="-8" y1="0" x2="8" y2="0" />
-              <line x1="0" y1="-8" x2="0" y2="8" />
+
+          <!-- 귀걸이 오른쪽 -->
+          <g class="guide-outline" data-for="earring" data-ear-side="right">
+            <ellipse class="guide-face" cx="138" cy="220" rx="78" ry="102" />
+            <ellipse class="guide-point" cx="220" cy="228" rx="14" ry="22" />
+            <g class="guide-cross" transform="translate(220 228)">
+              <line x1="-9" y1="0" x2="9" y2="0" />
+              <line x1="0" y1="-9" x2="0" y2="9" />
             </g>
-            <text x="150" y="380">얼굴 프레임 · + 에 귀를 맞추세요</text>
+            <text x="150" y="380">오른쪽 귀 + 에 맞추세요</text>
           </g>
+
+          <!-- 귀걸이 왼쪽 -->
+          <g class="guide-outline" data-for="earring" data-ear-side="left">
+            <ellipse class="guide-face" cx="162" cy="220" rx="78" ry="102" />
+            <ellipse class="guide-point" cx="80" cy="228" rx="14" ry="22" />
+            <g class="guide-cross" transform="translate(80 228)">
+              <line x1="-9" y1="0" x2="9" y2="0" />
+              <line x1="0" y1="-9" x2="0" y2="9" />
+            </g>
+            <text x="150" y="380">왼쪽 귀 + 에 맞추세요</text>
+          </g>
+
+          <!-- 목걸이: 얼굴 위, 목+ 아래 -->
           <g class="guide-outline" data-for="necklace">
-            <path class="guide-arm" d="M78 40c20-18 50-20 72-4 14 10 22 28 20 46l-8 28c34 12 58 42 64 78H74c6-36 30-66 64-78l-8-28c-2-16 4-34 14-42z" />
-            <path class="guide-bracelet" d="M78 210c28 48 116 48 144 0" />
-            <g class="guide-cross" transform="translate(150 248)">
+            <ellipse class="guide-face" cx="150" cy="145" rx="72" ry="86" />
+            <path class="guide-arm" d="M68 220c22-10 44-14 82-14s60 4 82 14l12 100H56z" />
+            <path class="guide-bracelet" d="M88 248c24 44 100 44 124 0" />
+            <g class="guide-cross" transform="translate(150 285)">
               <line x1="-12" y1="0" x2="12" y2="0" />
               <line x1="0" y1="-12" x2="0" y2="12" />
               <circle r="4" />
             </g>
-            <text x="150" y="380">상체 가이드 · + 에 목 중앙</text>
+            <text x="150" y="410">얼굴↑ · + 에 목·쇄골</text>
           </g>
         </svg>
       </div>
     </div>
     <div class="camera-bottom">
       <button type="button" id="shutterBtn" class="shutter" aria-label="촬영"></button>
-      <p class="camera-sub">은행 인증처럼 가이드에 맞춘 뒤 버튼을 누르세요</p>
+      <p class="camera-sub">위=손/얼굴 기준으로 맞춘 뒤 촬영하세요</p>
     </div>
   </div>
 
-  <script type="module" src="./src/studio.js?v=20260724-tryon14"></script>
+  <script type="module" src="./src/studio.js?v=20260724-tryon15"></script>
 </body>
 </html>
