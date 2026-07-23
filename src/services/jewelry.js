@@ -21,7 +21,7 @@ function load(url) {
 }
 
 export async function prepareJewelry(item, onStatus = () => {}) {
-  const cacheId = `${item.id}::cut2`;
+  const cacheId = `${item.id}::cut3`;
   try {
     const cached = await getProcessed(cacheId);
     if (cached?.blob) {
