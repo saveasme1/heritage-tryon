@@ -1,0 +1,2 @@
+# 처리된 투명 PNG는 브라우저 IndexedDB(`heritage-tryon/processed`)에 캐시됩니다.
+# 이 폴더는 서버 저장 위치의 논리 대응입니다.

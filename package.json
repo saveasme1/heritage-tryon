@@ -1,0 +1,9 @@
+{
+  "name": "heritage-tryon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MVP virtual jewelry try-on (MediaPipe + OpenCV + CLIP + SAM2) — separate from hand-made.kr",
+  "scripts": {
+    "start": "npx --yes serve . -p 5177"
+  }
+}
