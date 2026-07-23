@@ -234,8 +234,16 @@ async function runMergeTryOn() {
     }
 
     const useType = detection.type || type;
-    const target = detection.target || fallbackTarget(state.bodyImage, useType);
-    const usedFallback = !detection.target;
+    let target = detection.target;
+    // Never place a bracelet with ring (finger) coordinates.
+    if (useType === "bracelet") {
+      target = detection.allTargets?.bracelet || fallbackTarget(state.bodyImage, "bracelet");
+    } else if (!target) {
+      target = fallbackTarget(state.bodyImage, useType);
+    }
+    const usedFallback = useType === "bracelet"
+      ? !detection.allTargets?.bracelet
+      : !detection.target;
     if (usedFallback) {
       setStatus("인식이 어려워 기본 위치로 합성합니다…");
     } else {
