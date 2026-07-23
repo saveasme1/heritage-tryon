@@ -179,6 +179,7 @@ function setBodyFromBlob(blob) {
     preview.alt = "";
     show(preview);
     hide($("captureEmpty"));
+    $("captureFrame")?.classList.add("has-photo");
     refreshReady();
     setStatus("사진이 준비되었습니다. ‘착용해보기’를 눌러주세요.", "is-ok");
   };
@@ -193,9 +194,34 @@ function onPickFile(event) {
   event.target.value = "";
 }
 
+const GUIDE_COPY = {
+  ring: { title: "반지 촬영", hint: "손등을 가이드에 맞추고 반지 손가락을 원에 두세요." },
+  bracelet: { title: "팔찌 촬영", hint: "손목이 가이드 타원에 오도록 팔을 맞춰 주세요." },
+  earring: { title: "귀걸이 촬영", hint: "귀가 보이도록 얼굴을 옆으로 맞춰 주세요." },
+  necklace: { title: "목걸이 촬영", hint: "목·쇄골이 보이도록 상체를 프레임에 맞춰 주세요." },
+};
+
+function setPartType(type) {
+  const next = GUIDE_COPY[type] ? type : "bracelet";
+  $("typeHint").value = next;
+  const guide = $("poseGuide");
+  if (guide) guide.dataset.type = next;
+  document.querySelectorAll(".part-tab").forEach((btn) => {
+    const on = btn.dataset.type === next;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const copy = GUIDE_COPY[next];
+  if ($("guideTitle")) $("guideTitle").textContent = copy.title;
+  if ($("guideHint")) $("guideHint").textContent = copy.hint;
+  if (!state.bodyImage) {
+    setStatus(`${copy.title}: 가이드에 맞춘 뒤 촬영하거나 업로드하세요.`);
+  }
+}
+
 function resolveType() {
   const hint = $("typeHint").value;
-  if (hint !== "auto") return hint;
+  if (hint && hint !== "auto") return hint;
   return guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
 }
 
@@ -215,7 +241,7 @@ async function runMergeTryOn() {
         cover: state.item.sourceUrl || state.item.cover,
         title: state.item.title,
       }, (m) => setStatus(m)),
-      20000,
+      45000,
       "주얼리 전처리 시간 초과"
     );
 
@@ -306,6 +332,13 @@ $("fileInput").addEventListener("change", onPickFile);
 $("mergeTryOn").addEventListener("click", runMergeTryOn);
 $("resetBtn").addEventListener("click", resetToSplit);
 $("downloadBtn").addEventListener("click", download);
+$("partTabs")?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".part-tab");
+  if (!btn) return;
+  setPartType(btn.dataset.type);
+});
 
 setStageMode("split");
+const guessed = guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
+setPartType(guessed);
 loadProduct();
