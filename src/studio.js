@@ -86,10 +86,16 @@ function loadImageNoCors(url) {
   });
 }
 
-async function fetchAsObjectUrl(url) {
-  const res = await fetch(url, { mode: "cors", cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return URL.createObjectURL(await res.blob());
+async function fetchAsObjectUrl(url, ms = 3500) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { mode: "cors", cache: "no-store", signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function loadProduct() {
@@ -104,6 +110,7 @@ async function loadProduct() {
   hide(img);
   img.removeAttribute("src");
   img.alt = "";
+  show(skeleton);
 
   const candidates = imageCandidates(state.item.cover);
   if (!candidates.length) {
@@ -115,21 +122,21 @@ async function loadProduct() {
   let lastErr;
   for (const url of candidates) {
     try {
-      let displayUrl = url;
-      try {
-        displayUrl = await fetchAsObjectUrl(url);
-        state.item.sourceUrl = url;
-      } catch (_) {
-        displayUrl = url;
-        state.item.sourceUrl = url;
-      }
-      await loadImageNoCors(displayUrl);
-      img.src = displayUrl;
+      // 1) Show immediately with plain <img> (no CORS hang).
+      await loadImageNoCors(url);
+      img.src = url;
       img.alt = state.item.title || "선택 제품";
       show(img);
       hide(skeleton);
       state.productReady = true;
-      state.item.cover = displayUrl;
+      state.item.sourceUrl = url;
+      state.item.cover = url;
+
+      // 2) Optional blob upgrade for canvas (timed; never block UI).
+      fetchAsObjectUrl(url).then((blobUrl) => {
+        state.item.cover = blobUrl;
+      }).catch(() => {});
+
       setStatus("제품을 확인한 뒤 사진을 준비하세요.");
       refreshReady();
       return;
