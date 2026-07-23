@@ -112,21 +112,75 @@ function isCutoutGood(canvas) {
   return edge < 0.18 && ratio > 0.02 && ratio < 0.85;
 }
 
+function hardenAlpha(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3];
+    if (a < 48) d[i + 3] = 0;
+    else if (a > 210) d[i + 3] = 255;
+    else d[i + 3] = Math.round(((a - 48) / (210 - 48)) * 255);
+  }
+  ctx.putImageData(id, 0, 0);
+  return canvas;
+}
+
+async function transformersCutout(img, onStatus = () => {}) {
+  onStatus("고품질 AI 누끼 로딩… (RMBG)");
+  const { pipeline, env } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
+  env.allowLocalModels = false;
+  env.backends.onnx.wasm.numThreads = 1;
+  const segmenter = await pipeline("image-segmentation", "Xenova/rmbg-1.4", { quantized: true });
+  onStatus("고품질 AI 누끼 처리 중…");
+  // Feed via canvas data URL for consistent decode
+  const src = canvasFromImage(img);
+  const dataUrl = src.toDataURL("image/png");
+  const result = await segmenter(dataUrl);
+  const mask = Array.isArray(result) ? result[0] : result;
+  const out = canvasFromImage(img);
+  const ctx = out.getContext("2d");
+  if (mask?.mask?.width && mask.mask.data) {
+    const mw = mask.mask.width;
+    const mh = mask.mask.height;
+    const tmp = document.createElement("canvas");
+    tmp.width = mw;
+    tmp.height = mh;
+    const mid = tmp.getContext("2d").createImageData(mw, mh);
+    for (let i = 0; i < mask.mask.data.length; i++) {
+      const v = mask.mask.data[i] > 0.5 ? 255 : 0;
+      mid.data[i * 4] = 255;
+      mid.data[i * 4 + 1] = 255;
+      mid.data[i * 4 + 2] = 255;
+      mid.data[i * 4 + 3] = v;
+    }
+    tmp.getContext("2d").putImageData(mid, 0, 0);
+    const scaled = document.createElement("canvas");
+    scaled.width = out.width;
+    scaled.height = out.height;
+    scaled.getContext("2d").drawImage(tmp, 0, 0, out.width, out.height);
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.drawImage(scaled, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  return hardenAlpha(out);
+}
+
 async function imglyCutout(img, onStatus = () => {}) {
-  onStatus("AI 누끼 처리 중… (첫 실행은 모델 다운로드)");
+  onStatus("AI 누끼 처리 중…");
   const mod = await import("https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm");
   const removeBackground = mod.removeBackground || mod.default;
   if (typeof removeBackground !== "function") throw new Error("누끼 모듈 로드 실패");
   const srcBlob = await new Promise((r) => canvasFromImage(img).toBlob(r, "image/png"));
   const outBlob = await removeBackground(srcBlob, {
-    output: { format: "image/png", quality: 0.92 },
+    output: { format: "image/png", quality: 0.95 },
     progress: (key, current, total) => {
       if (total) onStatus(`AI 누끼 ${key}: ${Math.round((current / total) * 100)}%`);
     },
   });
   const url = URL.createObjectURL(outBlob);
   try {
-    return canvasFromImage(await loadImage(url));
+    return hardenAlpha(canvasFromImage(await loadImage(url)));
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -214,13 +268,24 @@ export async function processJewelryImage(url, onStatus = () => {}) {
 
   let canvas = null;
   let method = "flood-fill";
+
+  // Prefer RMBG-1.4 (sharper jewelry edges) then img.ly
   try {
-    canvas = await withTimeout(imglyCutout(img, onStatus), HEAVY_MS, "AI 누끼 시간 초과");
-    method = "imgly-rembg";
+    canvas = await withTimeout(transformersCutout(img, onStatus), HEAVY_MS, "RMBG 시간 초과");
+    method = "rmbg-1.4";
   } catch (err) {
-    console.warn("imgly rembg failed", err);
-    onStatus("AI 누끼 실패 → 배경판 강제 제거…");
+    console.warn("rmbg failed", err);
+    onStatus("대체 AI 누끼로 전환…");
+    try {
+      canvas = await withTimeout(imglyCutout(img, onStatus), 35000, "AI 누끼 시간 초과");
+      method = "imgly-rembg";
+    } catch (err2) {
+      console.warn("imgly rembg failed", err2);
+      onStatus("AI 누끼 실패 → 배경판 강제 제거…");
+    }
   }
+
+  if (canvas) canvas = hardenAlpha(canvas);
 
   if (!canvas || !isCutoutGood(canvas)) {
     const refined = refineCutout(img, onStatus);
