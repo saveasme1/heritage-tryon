@@ -1,7 +1,6 @@
 import { prepareJewelry } from "./services/jewelry.js";
-import { detectBody, initDetectors } from "./services/mediapipe.js";
-import { classifyJewelryType } from "./services/clip.js";
-import { guessTypeFromText, assetUrl } from "./services/portfolio.js";
+import { detectBody } from "./services/mediapipe.js";
+import { guessTypeFromText } from "./services/portfolio.js";
 import { composeTryOn } from "./services/tryon.js";
 
 const params = new URLSearchParams(location.search);
@@ -170,8 +169,8 @@ async function resolveType(jewelryObjectUrl) {
   if (hint !== "auto") return hint;
   const fromText = guessTypeFromText(state.item.title, "");
   if (fromText) return fromText;
-  const clip = await classifyJewelryType(jewelryObjectUrl);
-  return clip.type || "ring";
+  // Skip heavy CLIP by default — it often hangs in iframe. Manual/텍스트 추정만 사용.
+  return "ring";
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -182,18 +181,19 @@ async function runMergeTryOn() {
   btn.disabled = true;
   setStatus("두 화면을 합치는 중…");
   setStageMode("merging");
-  await sleep(780);
+  await sleep(650);
 
   try {
-    setStatus("주얼리 전처리와 신체 인식을 진행합니다…");
-    await initDetectors();
+    setStatus("주얼리 배경 처리 중…");
     const jewelry = await prepareJewelry({
       id: state.item.id,
       cover: state.item.sourceUrl || state.item.cover,
       title: state.item.title,
     }, (m) => setStatus(m));
+
     const type = await resolveType(jewelry.objectUrl);
-    const detection = await detectBody(state.bodyImage, type);
+    setStatus("신체 인식 준비 중…");
+    const detection = await detectBody(state.bodyImage, type, (m) => setStatus(m));
     if (!detection.target) {
       throw new Error("손·귀·목을 찾지 못했습니다. 부위가 잘 보이게 다시 촬영해 주세요.");
     }
