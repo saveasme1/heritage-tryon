@@ -144,9 +144,9 @@ function angleDeg(a, b) {
  * Detect body targets. Returns null target on failure (caller may use fallback).
  */
 export async function detectBody(imageElement, preferredType = "auto", onStatus = () => {}) {
-  const typeHint = preferredType === "auto" ? "ring" : preferredType;
+  const typeHint = preferredType === "auto" ? "bracelet" : preferredType;
   try {
-    await initDetectors(detectorsForType(preferredType === "auto" ? "ring" : preferredType), onStatus);
+    await initDetectors(detectorsForType(preferredType === "auto" ? "bracelet" : preferredType), onStatus);
   } catch (err) {
     onStatus("신체 인식을 건너뛰고 기본 위치로 합성합니다…");
     return { type: typeHint, target: null, allTargets: {}, debug: { error: String(err.message || err) } };
@@ -185,21 +185,24 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
     const midMcp = hands[0][9];
     const indexMcp = hands[0][5];
     const pinkyMcp = hands[0][17];
-    const palmW = Math.max(dist(indexMcp, pinkyMcp), 1);
-    // Push past wrist toward forearm so bracelet sits on the wrist, not knuckles.
+    const midTip = hands[0][12] || midMcp;
+    // Fist photos shrink palmW — use hand length so bracelet stays wrist-sized.
+    const handLen = Math.max(dist(wrist, midTip), dist(wrist, midMcp), w * 0.15, 1);
+    const palmW = Math.max(dist(indexMcp, pinkyMcp), handLen * 0.42, w * 0.14);
     const vx = wrist.x - midMcp.x;
     const vy = wrist.y - midMcp.y;
     const vlen = Math.hypot(vx, vy) || 1;
     const ux = vx / vlen;
     const uy = vy / vlen;
+    // Sit clearly on the wrist/forearm, not the knuckle cluster.
     targets.bracelet = {
       center: {
-        x: wrist.x + ux * palmW * 0.28,
-        y: wrist.y + uy * palmW * 0.28,
+        x: wrist.x + ux * handLen * 0.48,
+        y: wrist.y + uy * handLen * 0.48,
       },
-      width: palmW * 1.35,
+      width: Math.max(palmW * 1.75, handLen * 0.55, w * 0.22),
       angle: angleDeg(indexMcp, pinkyMcp),
-      points: [wrist, indexMcp, pinkyMcp],
+      points: [wrist, indexMcp, pinkyMcp, midTip],
     };
   }
 
