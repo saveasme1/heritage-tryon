@@ -52,7 +52,7 @@ async function createCpu(factory, options, label) {
 }
 
 function detectorsForType(type) {
-  if (type === "ring") return ["hand"];
+  if (type === "ring" || type === "bracelet") return ["hand"];
   if (type === "earring") return ["face"];
   if (type === "necklace") return ["pose"];
   return ["hand"];
@@ -156,7 +156,7 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
   const h = imageElement.naturalHeight || imageElement.height;
   onStatus("사진에서 착용 위치 찾는 중…");
 
-  const targets = { ring: null, earring: null, necklace: null };
+  const targets = { ring: null, bracelet: null, earring: null, necklace: null };
   let hands = [];
   let faces = [];
   let poses = [];
@@ -180,12 +180,35 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
     }
   } catch (e) { console.warn("pose detect", e); }
 
+  if (hands[0]?.[0] && hands[0][9] && hands[0][5] && hands[0][17]) {
+    const wrist = hands[0][0];
+    const midMcp = hands[0][9];
+    const indexMcp = hands[0][5];
+    const pinkyMcp = hands[0][17];
+    const palmW = Math.max(dist(indexMcp, pinkyMcp), 1);
+    // Push past wrist toward forearm so bracelet sits on the wrist, not knuckles.
+    const vx = wrist.x - midMcp.x;
+    const vy = wrist.y - midMcp.y;
+    const vlen = Math.hypot(vx, vy) || 1;
+    const ux = vx / vlen;
+    const uy = vy / vlen;
+    targets.bracelet = {
+      center: {
+        x: wrist.x + ux * palmW * 0.28,
+        y: wrist.y + uy * palmW * 0.28,
+      },
+      width: palmW * 1.35,
+      angle: angleDeg(indexMcp, pinkyMcp),
+      points: [wrist, indexMcp, pinkyMcp],
+    };
+  }
+
   if (hands[0]?.[13] && hands[0][16]) {
     const mcp = hands[0][13];
     const tip = hands[0][16];
     targets.ring = {
       center: { x: (mcp.x + tip.x) / 2, y: (mcp.y + tip.y) / 2 },
-      width: dist(mcp, tip) * 0.55,
+      width: dist(mcp, tip) * 0.7,
       angle: angleDeg(mcp, tip),
       points: [mcp, tip],
     };
@@ -223,7 +246,8 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
 
   let resolvedType = preferredType === "auto" ? typeHint : preferredType;
   if (preferredType === "auto") {
-    if (targets.ring) resolvedType = "ring";
+    if (targets.bracelet) resolvedType = "bracelet";
+    else if (targets.ring) resolvedType = "ring";
     else if (targets.earring) resolvedType = "earring";
     else if (targets.necklace) resolvedType = "necklace";
   }
