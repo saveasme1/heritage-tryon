@@ -234,105 +234,45 @@ html, body { margin: 0; min-height: 100%; }
   height: min(78dvh, 640px);
 }
 .guide-dim {
-  fill: rgba(0, 0, 0, 0.45);
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  pointer-events: none;
 }
-.guide-outline { display: none; }
-.camera-guide[data-type="bracelet"] .guide-outline[data-for="bracelet"],
-.camera-guide[data-type="ring"] .guide-outline[data-for="ring"],
-.camera-guide[data-type="necklace"] .guide-outline[data-for="necklace"] {
+.guide-art {
+  display: none;
+  position: relative;
+  z-index: 1;
+  width: min(88vw, 380px);
+  height: auto;
+  max-height: min(70dvh, 620px);
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,0.35));
+}
+.camera-guide[data-type="bracelet"] .guide-art[data-for="bracelet"],
+.camera-guide[data-type="ring"] .guide-art[data-for="ring"],
+.camera-guide[data-type="necklace"] .guide-art[data-for="necklace"] {
   display: block;
 }
-.camera-guide[data-type="earring"][data-ear="right"] .guide-outline[data-for="earring"][data-ear-side="right"],
-.camera-guide[data-type="earring"][data-ear="left"] .guide-outline[data-for="earring"][data-ear-side="left"] {
+.camera-guide[data-type="earring"][data-ear="right"] .guide-art[data-for="earring"][data-ear-side="right"],
+.camera-guide[data-type="earring"][data-ear="left"] .guide-art[data-for="earring"][data-ear-side="left"] {
   display: block;
 }
-.guide-arm,
-.guide-face {
-  fill: none;
-  stroke: rgba(255,255,255,0.55);
-  stroke-width: 2.4;
-  stroke-dasharray: 7 6;
-}
-.guide-fingers {
-  fill: none;
-  stroke: rgba(255,255,255,0.7);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-.guide-bracelet,
-.guide-point {
-  fill: rgba(255, 130, 54, 0.1);
-  stroke: #ff8236;
-  stroke-width: 3.2;
-  stroke-dasharray: 9 6;
-  animation: guidePulse 1.4s ease-in-out infinite;
-}
-.guide-bracelet-inner {
-  fill: none;
-  stroke: rgba(255, 130, 54, 0.85);
-  stroke-width: 2;
-  stroke-dasharray: 4 4;
-}
-.guide-cross line {
-  stroke: #ff8236;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
-.guide-cross circle {
-  fill: #ff8236;
-  stroke: none;
-}
-.guide-outline text {
-  fill: rgba(255,255,255,0.95);
+.guide-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  z-index: 2;
+  margin: 0;
+  text-align: center;
+  color: rgba(255,255,255,0.95);
   font-size: 13px;
   font-weight: 700;
-  text-anchor: middle;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.65);
+  pointer-events: none;
 }
-
-.ear-side-bar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 0 12px 8px;
-}
-.ear-side-bar.is-hidden,
-.ear-side-bar[hidden] { display: none !important; }
-.ear-side-btn {
-  appearance: none;
-  font: inherit;
-  cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-  border-radius: 10px;
-  padding: 10px 8px;
-  font-size: 13px;
-  font-weight: 700;
-}
-.ear-side-btn.is-active {
-  background: rgba(255,130,54,0.28);
-  border-color: rgba(255,130,54,0.7);
-  color: #ffd7bf;
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.wear-chip {
-  border: 1px solid var(--line);
-  background: var(--accent-soft);
-  color: #c45a12;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.mask-hole,
-.guide-hole { display: none; }
 .camera-bottom {
   display: grid;
   justify-items: center;
