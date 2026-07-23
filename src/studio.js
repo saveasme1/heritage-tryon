@@ -17,6 +17,7 @@ const state = {
   afterCanvas: null,
   productReady: false,
   wearType: "bracelet",
+  earSide: "right",
   cameraStream: null,
 };
 
@@ -197,21 +198,51 @@ function onPickFile(event) {
 }
 
 const CAMERA_HINT = {
-  ring: "손 실루엣에 맞추고, 노란 원에 반지 손가락을 두세요",
-  bracelet: "팔 가이드 폭에 팔을 맞추고, + 교차점에 손목을 두세요",
-  earring: "얼굴 가이드 안에 들어오게 · 귀 포인트에 귀를 맞추세요",
-  necklace: "상체 가이드에 맞추고 목·쇄골이 보이게 하세요",
+  ring: "손가락이 위 · 검지(+)에 반지 손가락을 맞추세요",
+  bracelet: "손이 위 · +에 손목 · 팔뚝은 아래",
+  earring: "얼굴 가이드 안에 · 선택한 쪽 귀(+)에 맞추세요",
+  necklace: "얼굴이 위 · +에 목·쇄골을 맞추세요",
+};
+
+const WEAR_LABEL = {
+  ring: "반지",
+  bracelet: "팔찌",
+  earring: "귀걸이",
+  necklace: "목걸이",
 };
 
 function resolveType() {
   return state.wearType || guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
 }
 
+function setEarSide(side) {
+  state.earSide = side === "left" ? "left" : "right";
+  const guide = $("cameraGuide");
+  if (guide) guide.dataset.ear = state.earSide;
+  document.querySelectorAll(".ear-side-btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.ear === state.earSide);
+  });
+}
+
 function applyWearTypeFromProduct() {
   state.wearType = guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
   const guide = $("cameraGuide");
-  if (guide) guide.dataset.type = state.wearType;
-  if ($("cameraHint")) $("cameraHint").textContent = CAMERA_HINT[state.wearType] || CAMERA_HINT.bracelet;
+  if (guide) {
+    guide.dataset.type = state.wearType;
+    guide.dataset.ear = state.earSide || "right";
+  }
+  if ($("cameraHint")) {
+    $("cameraHint").textContent = CAMERA_HINT[state.wearType] || CAMERA_HINT.bracelet;
+  }
+  const chip = $("wearTypeChip");
+  if (chip) chip.textContent = WEAR_LABEL[state.wearType] || "자동";
+
+  const earBar = $("earSideBar");
+  if (earBar) {
+    const showEar = state.wearType === "earring";
+    earBar.hidden = !showEar;
+    earBar.classList.toggle("is-hidden", !showEar);
+  }
 }
 
 function stopCamera() {
@@ -316,7 +347,7 @@ async function runMergeTryOn() {
     let detection;
     try {
       detection = await withTimeout(
-        detectBody(state.bodyImage, type, (m) => setStatus(m)),
+        detectBody(state.bodyImage, type, (m) => setStatus(m), { earSide: state.earSide }),
         45000,
         "신체 인식 시간 초과"
       );
@@ -403,6 +434,11 @@ $("fileInput").addEventListener("change", onPickFile);
 $("mergeTryOn").addEventListener("click", runMergeTryOn);
 $("resetBtn").addEventListener("click", resetToSplit);
 $("downloadBtn").addEventListener("click", download);
+$("earSideBar")?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".ear-side-btn");
+  if (!btn) return;
+  setEarSide(btn.dataset.ear);
+});
 
 setStageMode("split");
 applyWearTypeFromProduct();
