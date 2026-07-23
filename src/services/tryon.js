@@ -1,7 +1,6 @@
 /**
- * Canvas jewelry placement.
- * Bracelet: show only the front band; cover hole + rear band with body pixels
- * so the back of the bracelet is hidden behind the wrist.
+ * Canvas jewelry placement — sharp, full jewelry first.
+ * Bracelet: soft inner hole only (no wiping half the band).
  */
 
 function canvasFromImage(img) {
@@ -20,7 +19,7 @@ function jewelryBounds(canvas) {
   for (let y = 0; y < height; y += step) {
     for (let x = 0; x < width; x += step) {
       const a = data[(y * width + x) * 4 + 3];
-      if (a > 12) {
+      if (a > 20) {
         found = true;
         if (x < minX) minX = x;
         if (y < minY) minY = y;
@@ -38,42 +37,30 @@ function jewelryBounds(canvas) {
 }
 
 function minWidthForType(outW, type) {
-  if (type === "bracelet") return outW * 0.34;
+  if (type === "bracelet") return outW * 0.36;
   if (type === "necklace") return outW * 0.22;
   if (type === "earring") return outW * 0.07;
   return outW * 0.09;
 }
 
-/**
- * Cover bracelet hole + rear band with body pixels (wrist hides the back).
- */
-function occludeBraceletWithBody(layerCtx, bodyCanvas, center, targetW, targetH, acrossAngleDeg, frontAngleDeg) {
-  const front = ((frontAngleDeg != null ? frontAngleDeg : acrossAngleDeg + 90) * Math.PI) / 180;
-  // Local +Y = hidden side (opposite knuckles)
-  const hideRot = front + Math.PI / 2;
-
-  const stamp = (buildPath) => {
-    layerCtx.save();
-    layerCtx.translate(center.x, center.y);
-    layerCtx.rotate(hideRot);
-    layerCtx.beginPath();
-    buildPath(layerCtx);
-    layerCtx.clip();
-    layerCtx.setTransform(1, 0, 0, 1, 0, 0);
-    layerCtx.drawImage(bodyCanvas, 0, 0);
-    layerCtx.restore();
-  };
-
-  // 1) Wrist through the middle (open the bracelet)
-  stamp((ctx) => {
-    ctx.ellipse(0, 0, targetW * 0.33, Math.max(targetH * 0.34, targetW * 0.13), 0, 0, Math.PI * 2);
-  });
-
-  // 2) Rear band behind wrist
-  stamp((ctx) => {
-    ctx.rect(-targetW * 0.58, targetH * 0.02, targetW * 1.16, targetH * 0.65);
-    ctx.ellipse(0, targetH * 0.12, targetW * 0.55, targetH * 0.48, 0, 0, Math.PI * 2);
-  });
+/** Soft hole only — keeps the full bracelet band sharp. */
+function softBraceletHole(layerCtx, center, targetW, targetH, angleDeg) {
+  const rad = (angleDeg * Math.PI) / 180;
+  layerCtx.save();
+  layerCtx.translate(center.x, center.y);
+  layerCtx.rotate(rad);
+  layerCtx.globalCompositeOperation = "destination-out";
+  const rx = targetW * 0.26;
+  const ry = Math.max(targetH * 0.28, targetW * 0.1);
+  const g = layerCtx.createRadialGradient(0, 0, Math.min(rx, ry) * 0.35, 0, 0, Math.max(rx, ry));
+  g.addColorStop(0, "rgba(0,0,0,1)");
+  g.addColorStop(0.55, "rgba(0,0,0,0.75)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  layerCtx.fillStyle = g;
+  layerCtx.beginPath();
+  layerCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  layerCtx.fill();
+  layerCtx.restore();
 }
 
 export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring") {
@@ -99,28 +86,22 @@ export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring"
   layer.height = out.height;
   const lctx = layer.getContext("2d");
 
-  const placeOne = (t, withOcclusion) => {
+  const placeOne = (t, withHole) => {
     if (!t?.center) return;
     let targetW = Math.max(8, t.width || out.width * 0.12);
     targetW = Math.max(targetW, minWidthForType(out.width, type));
     const aspect = crop.height / Math.max(crop.width, 1);
     let targetH = targetW * aspect;
     if (type === "bracelet") {
-      targetH = Math.min(Math.max(targetW * aspect, targetW * 0.28), targetW * 0.62);
+      // Prefer near-circular bracelet footprint
+      targetH = Math.min(Math.max(targetW * Math.min(aspect, 1), targetW * 0.55), targetW * 0.95);
     }
     if (type === "necklace") targetH = targetW * aspect * 0.9;
 
     const angle = t.angle || 0;
     const rad = (angle * Math.PI) / 180;
 
-    lctx.save();
-    lctx.translate(t.center.x + targetW * 0.02, t.center.y + targetH * 0.04);
-    lctx.rotate(rad);
-    lctx.globalAlpha = 0.2;
-    lctx.filter = "blur(4px)";
-    lctx.drawImage(crop, -targetW / 2, -targetH / 2, targetW, targetH);
-    lctx.restore();
-
+    // Crisp main jewelry — no blur filter (blur made it look broken)
     lctx.save();
     lctx.translate(t.center.x, t.center.y);
     lctx.rotate(rad);
@@ -131,9 +112,8 @@ export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring"
     lctx.drawImage(crop, -targetW / 2, -targetH / 2, targetW, targetH);
     lctx.restore();
 
-    if (withOcclusion && type === "bracelet") {
-      const frontAngle = t.frontAngle != null ? t.frontAngle : angle + 90;
-      occludeBraceletWithBody(lctx, bodyCanvas, t.center, targetW, targetH, angle, frontAngle);
+    if (withHole && type === "bracelet") {
+      softBraceletHole(lctx, t.center, targetW, targetH, angle);
     }
   };
 
@@ -167,12 +147,7 @@ export function fallbackTarget(bodyImg, type = "ring") {
     return { center: { x: w * 0.5, y: h * 0.42 }, width: w * 0.28, angle: 0 };
   }
   if (type === "bracelet") {
-    return {
-      center: { x: w * 0.38, y: h * 0.62 },
-      width: w * 0.38,
-      angle: -40,
-      frontAngle: -40 + 90,
-    };
+    return { center: { x: w * 0.42, y: h * 0.58 }, width: w * 0.4, angle: -35, frontAngle: 55 };
   }
   return { center: { x: w * 0.55, y: h * 0.45 }, width: w * 0.1, angle: -20 };
 }
