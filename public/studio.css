@@ -273,6 +273,46 @@ html, body { margin: 0; min-height: 100%; }
   text-shadow: 0 1px 4px rgba(0,0,0,0.65);
   pointer-events: none;
 }
+.ear-side-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 12px 8px;
+}
+.ear-side-bar.is-hidden,
+.ear-side-bar[hidden] { display: none !important; }
+.ear-side-btn {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ear-side-btn.is-active {
+  background: rgba(255,130,54,0.28);
+  border-color: rgba(255,130,54,0.7);
+  color: #ffd7bf;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wear-chip {
+  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: #c45a12;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
 .camera-bottom {
   display: grid;
   justify-items: center;
