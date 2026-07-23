@@ -21,8 +21,9 @@ function load(url) {
 }
 
 export async function prepareJewelry(item, onStatus = () => {}) {
+  const cacheId = `${item.id}::cut2`;
   try {
-    const cached = await getProcessed(item.id);
+    const cached = await getProcessed(cacheId);
     if (cached?.blob) {
       const url = URL.createObjectURL(cached.blob);
       const img = await load(url);
@@ -42,7 +43,7 @@ export async function prepareJewelry(item, onStatus = () => {}) {
   if (!src) throw new Error("주얼리 이미지 경로가 없습니다.");
   const { canvas, blob, method, error } = await processJewelryImage(src);
   try {
-    await putProcessed(item.id, blob, { method, error: error || null, source: item.cover });
+    await putProcessed(cacheId, blob, { method, error: error || null, source: item.cover });
   } catch (_) {}
   const objectUrl = URL.createObjectURL(blob);
   onStatus(`배경 처리 완료 (${method})`);
