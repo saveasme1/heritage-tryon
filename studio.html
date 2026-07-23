@@ -8,7 +8,7 @@
   <base href="./" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon9" />
+  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon10" />
 </head>
 <body class="studio-body">
   <div class="studio-shell">
@@ -47,11 +47,11 @@
             <input id="fileInput" type="file" accept="image/*" hidden />
           </label>
           <select id="typeHint" class="select" aria-label="착용 부위">
-            <option value="auto">자동</option>
-            <option value="bracelet">손목(팔찌)</option>
+            <option value="bracelet" selected>손목(팔찌)</option>
             <option value="ring">손가락(반지)</option>
             <option value="earring">귀(귀걸이)</option>
             <option value="necklace">목(목걸이)</option>
+            <option value="auto">자동</option>
           </select>
         </div>
       </section>
@@ -72,6 +72,6 @@
     </footer>
   </div>
 
-  <script type="module" src="./src/studio.js?v=20260724-tryon9"></script>
+  <script type="module" src="./src/studio.js?v=20260724-tryon10"></script>
 </body>
 </html>
