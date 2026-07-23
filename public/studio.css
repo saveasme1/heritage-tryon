@@ -160,6 +160,7 @@ html, body { margin: 0; min-height: 100%; }
   color: var(--muted);
   padding: 16px;
   pointer-events: none;
+  z-index: 2;
 }
 .empty-state strong {
   color: var(--ink);
@@ -169,6 +170,98 @@ html, body { margin: 0; min-height: 100%; }
   font-size: 12px;
   line-height: 1.45;
   max-width: 22ch;
+}
+
+.capture-frame > img {
+  position: relative;
+  z-index: 1;
+}
+.pose-guide {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+.pose-guide .guide-svg {
+  width: min(86%, 280px);
+  height: min(92%, 340px);
+  overflow: visible;
+}
+.guide-layer { display: none; }
+.pose-guide[data-type="bracelet"] .guide-layer[data-for="bracelet"],
+.pose-guide[data-type="ring"] .guide-layer[data-for="ring"],
+.pose-guide[data-type="earring"] .guide-layer[data-for="earring"],
+.pose-guide[data-type="necklace"] .guide-layer[data-for="necklace"] {
+  display: block;
+}
+.guide-silhouette {
+  fill: none;
+  stroke: rgba(255, 130, 54, 0.55);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 6 5;
+}
+.guide-silhouette.soft {
+  stroke: rgba(255, 130, 54, 0.35);
+  stroke-width: 1.6;
+}
+.guide-target {
+  fill: rgba(255, 130, 54, 0.12);
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-dasharray: 5 4;
+  animation: guidePulse 1.6s ease-in-out infinite;
+}
+.guide-target.line {
+  fill: none;
+  stroke-linecap: round;
+}
+.guide-target.dot {
+  fill: rgba(255, 130, 54, 0.35);
+  stroke-dasharray: none;
+}
+.guide-label {
+  fill: rgba(22, 21, 19, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.capture-frame.has-photo .pose-guide {
+  opacity: 0.42;
+}
+.capture-frame.has-photo .guide-label {
+  opacity: 0;
+}
+@keyframes guidePulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+.part-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.part-tab {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 9px 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.part-tab.is-active {
+  background: var(--accent-soft);
+  border-color: rgba(255, 130, 54, 0.45);
+  color: #c45a12;
+  box-shadow: inset 0 0 0 1px rgba(255, 130, 54, 0.2);
 }
 
 .capture-toolbar,
@@ -297,7 +390,9 @@ html, body { margin: 0; min-height: 100%; }
   }
   .capture-toolbar { gap: 4px; }
   .btn, .select { padding: 7px 8px; font-size: 11px; border-radius: 8px; }
-  .select { min-width: 68px; }
+  .part-tab { padding: 8px 4px; font-size: 11px; border-radius: 8px; }
+  .pose-guide .guide-svg { width: min(92%, 220px); height: min(94%, 260px); }
+  .guide-label { font-size: 10px; }
   .empty-state strong { font-size: 12px; }
   .empty-state span { font-size: 10px; max-width: 14ch; }
   .header-copy h1 { font-size: 15px; }
