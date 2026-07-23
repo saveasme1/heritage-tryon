@@ -21,6 +21,8 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+const show = (el) => el && el.classList.remove("is-hidden");
+const hide = (el) => el && el.classList.add("is-hidden");
 
 function setStatus(msg, kind = "") {
   const el = $("status");
@@ -29,19 +31,34 @@ function setStatus(msg, kind = "") {
   if (kind) el.classList.add(kind);
 }
 
+function setStageMode(mode) {
+  const stage = $("studioStage");
+  stage.classList.remove("mode-split", "mode-merging", "mode-result");
+  stage.classList.add(`mode-${mode}`);
+  if (mode === "split") {
+    show($("panelProduct"));
+    show($("panelCapture"));
+    hide($("panelResult"));
+    $("mergeTryOn").classList.remove("is-hidden");
+  } else if (mode === "result") {
+    hide($("panelProduct"));
+    hide($("panelCapture"));
+    show($("panelResult"));
+    $("mergeTryOn").classList.add("is-hidden");
+  }
+}
+
 function refreshReady() {
   const ready = Boolean(state.productReady && state.bodyImage);
   $("mergeTryOn").disabled = !ready;
-  if (ready) setStatus("준비가 끝났습니다. 아래 버튼으로 가상착용을 시작하세요.", "is-ok");
+  if (ready) setStatus("준비가 끝났습니다. ‘착용해보기’를 눌러 결과를 확인하세요.", "is-ok");
 }
 
 function imageCandidates(raw) {
   const value = String(raw || "").trim();
   if (!value) return [];
   const list = [];
-  const push = (u) => {
-    if (u && !list.includes(u)) list.push(u);
-  };
+  const push = (u) => { if (u && !list.includes(u)) list.push(u); };
   if (/^https?:\/\//i.test(value)) {
     push(value);
     try {
@@ -63,7 +80,6 @@ function imageCandidates(raw) {
 function loadImageNoCors(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    // Do NOT set crossOrigin for display — missing ACAO causes broken-image icon.
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("load failed"));
     img.src = url;
@@ -73,22 +89,25 @@ function loadImageNoCors(url) {
 async function fetchAsObjectUrl(url) {
   const res = await fetch(url, { mode: "cors", cache: "no-store" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
+  return URL.createObjectURL(await res.blob());
 }
 
 async function loadProduct() {
   $("productTitle").textContent = state.item.title || "헤리티지";
   const cat = $("productCat");
   if (state.item.category) {
-    cat.hidden = false;
     cat.textContent = state.item.category;
+    show(cat);
   }
   const skeleton = $("productSkeleton");
   const img = $("productImage");
+  hide(img);
+  img.removeAttribute("src");
+  img.alt = "";
+
   const candidates = imageCandidates(state.item.cover);
   if (!candidates.length) {
-    skeleton.classList.add("is-hidden");
+    hide(skeleton);
     setStatus("제품 이미지가 없습니다. 포트폴리오에서 다시 열어 주세요.", "is-err");
     return;
   }
@@ -96,29 +115,29 @@ async function loadProduct() {
   let lastErr;
   for (const url of candidates) {
     try {
-      // Prefer blob URL so canvas processing works even when display CDN lacks CORS.
       let displayUrl = url;
       try {
         displayUrl = await fetchAsObjectUrl(url);
-        state.item.cover = displayUrl;
         state.item.sourceUrl = url;
       } catch (_) {
         displayUrl = url;
-        state.item.cover = url;
         state.item.sourceUrl = url;
       }
       await loadImageNoCors(displayUrl);
       img.src = displayUrl;
-      skeleton.classList.add("is-hidden");
+      img.alt = state.item.title || "선택 제품";
+      show(img);
+      hide(skeleton);
       state.productReady = true;
-      setStatus("제품을 확인한 뒤, 오른쪽(모바일은 아래)에서 사진을 준비하세요.");
+      state.item.cover = displayUrl;
+      setStatus("제품을 확인한 뒤 사진을 준비하세요.");
       refreshReady();
       return;
     } catch (err) {
       lastErr = err;
     }
   }
-  skeleton.classList.add("is-hidden");
+  hide(skeleton);
   setStatus(`제품 이미지를 불러오지 못했습니다. ${lastErr?.message || ""}`.trim(), "is-err");
 }
 
@@ -129,9 +148,10 @@ function setBodyFromBlob(blob) {
     state.bodyImage = img;
     const preview = $("bodyPreview");
     preview.src = url;
-    preview.hidden = false;
-    $("captureEmpty").hidden = true;
-    $("camVideo").hidden = true;
+    preview.alt = "";
+    show(preview);
+    hide($("captureEmpty"));
+    hide($("camVideo"));
     refreshReady();
   };
   img.onerror = () => setStatus("사진 로드에 실패했습니다.", "is-err");
@@ -146,13 +166,13 @@ async function startCamera() {
       audio: false,
     });
     const video = $("camVideo");
-    video.hidden = false;
-    $("bodyPreview").hidden = true;
-    $("captureEmpty").hidden = true;
+    show(video);
+    hide($("bodyPreview"));
+    hide($("captureEmpty"));
     video.srcObject = state.stream;
     await video.play();
     $("snapCam").disabled = false;
-    setStatus("카메라가 켜졌습니다. ‘사진 촬영’을 누르세요.");
+    setStatus("카메라가 켜졌습니다. ‘촬영’을 누르세요.");
   } catch (err) {
     setStatus(`카메라 권한이 필요합니다: ${err.message}`, "is-err");
   }
@@ -163,7 +183,8 @@ function stopCamera() {
     state.stream.getTracks().forEach((t) => t.stop());
     state.stream = null;
   }
-  $("camVideo").srcObject = null;
+  const video = $("camVideo");
+  if (video) video.srcObject = null;
   $("snapCam").disabled = true;
 }
 
@@ -191,23 +212,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function runMergeTryOn() {
   if (!state.bodyImage || !state.productReady) return;
-  const stage = $("studioStage");
   const btn = $("mergeTryOn");
   btn.disabled = true;
-  setStatus("화면을 합치는 중…");
-  stage.classList.remove("is-merged");
-  stage.classList.add("is-merging");
-  await sleep(850);
+  setStatus("두 화면을 합치는 중…");
+  setStageMode("merging");
+  await sleep(780);
 
   try {
     setStatus("주얼리 전처리와 신체 인식을 진행합니다…");
     await initDetectors();
-    const jewelryItem = {
+    const jewelry = await prepareJewelry({
       id: state.item.id,
       cover: state.item.sourceUrl || state.item.cover,
       title: state.item.title,
-    };
-    const jewelry = await prepareJewelry(jewelryItem, (m) => setStatus(m));
+    }, (m) => setStatus(m));
     const type = await resolveType(jewelry.objectUrl);
     const detection = await detectBody(state.bodyImage, type);
     if (!detection.target) {
@@ -215,36 +233,27 @@ async function runMergeTryOn() {
     }
     const typeLabel = { ring: "반지", earring: "귀걸이", necklace: "목걸이" }[detection.type] || detection.type;
     setStatus(`${typeLabel} 위치에 합성 중…`);
-    const after = await composeTryOn(
-      state.bodyImage,
-      jewelry.canvas,
-      detection.target,
-      detection.type
-    );
+    const after = await composeTryOn(state.bodyImage, jewelry.canvas, detection.target, detection.type);
     state.afterCanvas = after;
     const canvas = $("resultCanvas");
     canvas.width = after.width;
     canvas.height = after.height;
     canvas.getContext("2d").drawImage(after, 0, 0);
-    $("panelResult").hidden = false;
-    stage.classList.remove("is-merging");
-    stage.classList.add("is-merged");
-    setStatus("가상착용 미리보기가 준비되었습니다.", "is-ok");
+    setStageMode("result");
+    setStatus("착용 미리보기입니다. 저장하거나 초기화할 수 있습니다.", "is-ok");
   } catch (err) {
     console.error(err);
-    stage.classList.remove("is-merging", "is-merged");
-    $("panelResult").hidden = true;
+    setStageMode("split");
     setStatus(String(err.message || err), "is-err");
-    btn.disabled = false;
+    refreshReady();
   }
 }
 
-function retry() {
+function resetToSplit() {
   state.afterCanvas = null;
-  $("studioStage").classList.remove("is-merging", "is-merged");
-  $("panelResult").hidden = true;
+  setStageMode("split");
   refreshReady();
-  setStatus("사진을 바꾼 뒤 다시 가상착용을 시작해 주세요.");
+  setStatus("초기화되었습니다. 사진을 바꾸거나 다시 착용해보세요.");
 }
 
 function download() {
@@ -273,11 +282,8 @@ $("fileInput").addEventListener("change", (e) => {
   if (file) setBodyFromBlob(file);
 });
 $("mergeTryOn").addEventListener("click", runMergeTryOn);
-$("retryBtn").addEventListener("click", retry);
+$("resetBtn").addEventListener("click", resetToSplit);
 $("downloadBtn").addEventListener("click", download);
 
-if (embedded) {
-  document.documentElement.classList.add("is-embedded");
-}
-
+setStageMode("split");
 loadProduct();
