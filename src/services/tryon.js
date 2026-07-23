@@ -36,7 +36,7 @@ function jewelryBounds(canvas) {
 }
 
 function minWidthForType(outW, type) {
-  if (type === "bracelet") return outW * 0.28;
+  if (type === "bracelet") return outW * 0.34;
   if (type === "necklace") return outW * 0.22;
   if (type === "earring") return outW * 0.07;
   return outW * 0.09; // ring
@@ -74,9 +74,8 @@ export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring"
     const aspect = crop.height / Math.max(crop.width, 1);
     let targetH = targetW * aspect;
     if (type === "bracelet") {
-      // Wrist band: keep it wide, not a tiny finger ring.
-      targetH = Math.min(targetH, targetW * 0.55);
-      targetH = Math.max(targetH, targetW * 0.22);
+      // Wrist band: wide oval across the wrist
+      targetH = Math.min(Math.max(targetW * aspect, targetW * 0.28), targetW * 0.62);
     }
     if (type === "necklace") targetH = targetW * aspect * 0.9;
 
@@ -133,7 +132,7 @@ export function fallbackTarget(bodyImg, type = "ring") {
   }
   if (type === "bracelet") {
     // Wrist-ish zone for typical forearm/hand photos
-    return { center: { x: w * 0.42, y: h * 0.55 }, width: w * 0.32, angle: -35 };
+    return { center: { x: w * 0.38, y: h * 0.62 }, width: w * 0.38, angle: -40 };
   }
   return { center: { x: w * 0.55, y: h * 0.45 }, width: w * 0.1, angle: -20 };
 }
