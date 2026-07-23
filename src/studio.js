@@ -198,10 +198,17 @@ function onPickFile(event) {
 }
 
 const CAMERA_HINT = {
-  ring: "손가락이 위 · 검지(+)에 반지 손가락을 맞추세요",
-  bracelet: "손이 위 · +에 손목 · 팔뚝은 아래",
-  earring: "얼굴 가이드 안에 · 선택한 쪽 귀(+)에 맞추세요",
-  necklace: "얼굴이 위 · +에 목·쇄골을 맞추세요",
+  ring: "손가락을 위로 · 검지 원(+)에 맞추세요",
+  bracelet: "주먹을 위로 · 주황 링(+)에 손목을 맞추세요",
+  earring: "얼굴 가이드 안 · 선택한 귀(+)에 맞추세요",
+  necklace: "얼굴을 위로 · 목(+)에 맞추세요",
+};
+
+const GUIDE_CAPTION = {
+  ring: "검지(+)에 반지 손가락",
+  bracelet: "손↑ · 손목(+) · 팔뚝↓",
+  earring: "선택한 귀에 + 맞추기",
+  necklace: "얼굴↑ · 목·쇄골(+)",
 };
 
 const WEAR_LABEL = {
@@ -233,6 +240,9 @@ function applyWearTypeFromProduct() {
   }
   if ($("cameraHint")) {
     $("cameraHint").textContent = CAMERA_HINT[state.wearType] || CAMERA_HINT.bracelet;
+  }
+  if ($("guideCaption")) {
+    $("guideCaption").textContent = GUIDE_CAPTION[state.wearType] || GUIDE_CAPTION.bracelet;
   }
   const chip = $("wearTypeChip");
   if (chip) chip.textContent = WEAR_LABEL[state.wearType] || "자동";
@@ -387,7 +397,7 @@ async function runMergeTryOn() {
     setStageMode("result");
     setStatus(
       usedFallback
-        ? "기본 위치 미리보기입니다. 부위 선택 후 다시 시도하거나 저장하세요."
+        ? "위치 인식이 어려워 가이드 기준으로 합성했습니다. 손·손목이 더 보이게 다시 촬영해 보세요."
         : "착용 미리보기입니다. 저장하거나 초기화할 수 있습니다.",
       "is-ok"
     );
