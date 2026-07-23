@@ -220,7 +220,7 @@ html, body { margin: 0; min-height: 100%; }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
+  /* no mirror — matching hand to guide must feel natural */
 }
 .camera-guide {
   position: absolute;
@@ -243,29 +243,44 @@ html, body { margin: 0; min-height: 100%; }
 .camera-guide[data-type="necklace"] .guide-outline[data-for="necklace"] {
   display: block;
 }
-.guide-outline .guide-hole {
-  fill: transparent;
-  stroke: #ff8236;
-  stroke-width: 3.5;
-  stroke-dasharray: 10 7;
-  animation: guidePulse 1.5s ease-in-out infinite;
-}
-.guide-outline ellipse:not(.guide-hole),
-.guide-outline circle,
-.guide-outline path {
+.guide-arm,
+.guide-face {
   fill: none;
-  stroke: #ff8236;
-  stroke-width: 3;
-  stroke-dasharray: 8 6;
-  animation: guidePulse 1.5s ease-in-out infinite;
+  stroke: rgba(255,255,255,0.55);
+  stroke-width: 2.4;
+  stroke-dasharray: 7 6;
 }
-.mask-hole { display: none; }
+.guide-bracelet,
+.guide-point {
+  fill: rgba(255, 130, 54, 0.1);
+  stroke: #ff8236;
+  stroke-width: 3.2;
+  stroke-dasharray: 9 6;
+  animation: guidePulse 1.4s ease-in-out infinite;
+}
+.guide-bracelet-inner {
+  fill: none;
+  stroke: rgba(255, 130, 54, 0.85);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+.guide-cross line {
+  stroke: #ff8236;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.guide-cross circle {
+  fill: #ff8236;
+  stroke: none;
+}
 .guide-outline text {
-  fill: rgba(255,255,255,0.92);
+  fill: rgba(255,255,255,0.95);
   font-size: 13px;
   font-weight: 700;
   text-anchor: middle;
 }
+.mask-hole,
+.guide-hole { display: none; }
 .camera-bottom {
   display: grid;
   justify-items: center;
