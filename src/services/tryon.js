@@ -1,5 +1,6 @@
 /**
- * Jewelry placement — sharp cutout + bracelet wrap (front band visible, back hidden).
+ * Jewelry placement — cylindrical bracelet wrap (not flat sticker).
+ * Uses MediaPipe wrist geometry + metal texture from rembg cutout.
  */
 
 function canvasFromImage(img) {
@@ -69,61 +70,234 @@ export function despillCanvas(canvas) {
 }
 
 function minWidthForType(outW, type) {
-  if (type === "bracelet") return outW * 0.34;
+  if (type === "bracelet") return outW * 0.22;
   if (type === "necklace") return outW * 0.22;
   if (type === "earring") return outW * 0.07;
   return outW * 0.085;
 }
 
-/**
- * Bracelet wrap: show upper band on skin, hide lower band behind wrist with body stamp.
- */
-function wrapBracelet(layerCtx, bodyCanvas, crop, center, targetW, targetH, angleDeg, frontAngleDeg) {
-  const across = (angleDeg * Math.PI) / 180;
-  const front = ((frontAngleDeg != null ? frontAngleDeg : angleDeg + 90) * Math.PI) / 180;
-  // Local axes: after rotate(across), X = along band, Y = along forearm
-  // Hide side = opposite of knuckles (front)
-  const hideRot = front + Math.PI / 2;
+function clamp(v, a, b) {
+  return Math.max(a, Math.min(b, v));
+}
 
-  // 1) Soft contact shadow on body (drawn later under jewelry via layer order — draw first on layer)
+function sampleBilinear(data, tw, th, x, y) {
+  const x0 = clamp(Math.floor(x), 0, tw - 1);
+  const y0 = clamp(Math.floor(y), 0, th - 1);
+  const x1 = clamp(x0 + 1, 0, tw - 1);
+  const y1 = clamp(y0 + 1, 0, th - 1);
+  const fx = x - x0;
+  const fy = y - y0;
+  const i00 = (y0 * tw + x0) * 4;
+  const i10 = (y0 * tw + x1) * 4;
+  const i01 = (y1 * tw + x0) * 4;
+  const i11 = (y1 * tw + x1) * 4;
+  const mix = (a, b, t) => a + (b - a) * t;
+  const r = mix(mix(data[i00], data[i10], fx), mix(data[i01], data[i11], fx), fy);
+  const g = mix(mix(data[i00 + 1], data[i10 + 1], fx), mix(data[i01 + 1], data[i11 + 1], fx), fy);
+  const b = mix(mix(data[i00 + 2], data[i10 + 2], fx), mix(data[i01 + 2], data[i11 + 2], fx), fy);
+  const a = mix(mix(data[i00 + 3], data[i10 + 3], fx), mix(data[i01 + 3], data[i11 + 3], fx), fy);
+  return [r, g, b, a];
+}
+
+/** Average opaque metal color + build 1D circumferential texture strip. */
+function buildMetalStrip(crop, stripW = 512, stripH = 48) {
+  const ctx = crop.getContext("2d", { willReadFrequently: true });
+  const { data, width: tw, height: th } = ctx.getImageData(0, 0, crop.width, crop.height);
+  let sr = 0, sg = 0, sb = 0, n = 0;
+  const step = Math.max(1, Math.floor(Math.min(tw, th) / 120));
+  for (let y = 0; y < th; y += step) {
+    for (let x = 0; x < tw; x += step) {
+      const i = (y * tw + x) * 4;
+      if (data[i + 3] < 80) continue;
+      // skip near-white plate leftovers
+      if (data[i] > 235 && data[i + 1] > 235 && data[i + 2] > 230) continue;
+      sr += data[i];
+      sg += data[i + 1];
+      sb += data[i + 2];
+      n++;
+    }
+  }
+  const avg = n
+    ? [sr / n, sg / n, sb / n]
+    : [212, 175, 95];
+
+  const strip = document.createElement("canvas");
+  strip.width = stripW;
+  strip.height = stripH;
+  const sctx = strip.getContext("2d", { willReadFrequently: true });
+  const sid = sctx.createImageData(stripW, stripH);
+  const sd = sid.data;
+
+  // Sample crop along a ring path if oval-like, else scan row by luminance
+  for (let u = 0; u < stripW; u++) {
+    const t = u / stripW;
+    // walk a horizontal band across the crop mid-height (bracelet product arcs)
+    const srcX = t * (tw - 1);
+    for (let v = 0; v < stripH; v++) {
+      const srcY = (0.25 + (v / stripH) * 0.5) * (th - 1);
+      let [r, g, b, a] = sampleBilinear(data, tw, th, srcX, srcY);
+      if (a < 40) {
+        // fallback to average metal with slight variation
+        const wobble = 0.92 + 0.16 * Math.sin(t * Math.PI * 8 + v * 0.2);
+        r = avg[0] * wobble;
+        g = avg[1] * wobble;
+        b = avg[2] * wobble;
+        a = 255;
+      }
+      const o = (v * stripW + u) * 4;
+      sd[o] = r;
+      sd[o + 1] = g;
+      sd[o + 2] = b;
+      sd[o + 3] = 255;
+    }
+  }
+  sctx.putImageData(sid, 0, 0);
+  return { strip, avg };
+}
+
+/**
+ * True elliptical cylinder band around wrist — front visible, back occluded,
+ * metal texture + specular, contact shadow. Not a flat product paste.
+ */
+function wrapBraceletCylinder(layerCtx, bodyCanvas, crop, center, wristW, angleDeg, frontAngleDeg) {
+  const across = (angleDeg * Math.PI) / 180;
+  const frontAng = ((frontAngleDeg != null ? frontAngleDeg : angleDeg - 90) * Math.PI) / 180;
+  const rx = Math.max(12, wristW * 0.48);
+  const ry = Math.max(8, rx * 0.38);
+  const thickness = clamp(rx * 0.22, 6, rx * 0.32);
+  const { strip, avg } = buildMetalStrip(crop);
+  const stripCtx = strip.getContext("2d", { willReadFrequently: true });
+  const { data: td, width: sw, height: sh } = stripCtx.getImageData(0, 0, strip.width, strip.height);
+
+  const cosA = Math.cos(across);
+  const sinA = Math.sin(across);
+  const pad = Math.ceil(rx + thickness + 8);
+  const x0 = Math.max(0, Math.floor(center.x - pad));
+  const y0 = Math.max(0, Math.floor(center.y - pad));
+  const x1 = Math.min(layerCtx.canvas.width, Math.ceil(center.x + pad));
+  const y1 = Math.min(layerCtx.canvas.height, Math.ceil(center.y + pad));
+  const bw = Math.max(1, x1 - x0);
+  const bh = Math.max(1, y1 - y0);
+
+  const band = layerCtx.createImageData(bw, bh);
+  const bd = band.data;
+  const rInner = 1 - thickness / (rx * 2.2);
+  const rOuter = 1 + thickness / (rx * 2.2);
+
+  // Contact shadow under band (body space)
   layerCtx.save();
   layerCtx.translate(center.x, center.y);
   layerCtx.rotate(across);
-  layerCtx.fillStyle = "rgba(0,0,0,0.22)";
+  const shadow = layerCtx.createRadialGradient(0, ry * 0.15, rx * 0.2, 0, ry * 0.2, rx * 0.95);
+  shadow.addColorStop(0, "rgba(0,0,0,0.28)");
+  shadow.addColorStop(0.55, "rgba(0,0,0,0.12)");
+  shadow.addColorStop(1, "rgba(0,0,0,0)");
+  layerCtx.fillStyle = shadow;
   layerCtx.beginPath();
-  layerCtx.ellipse(0, targetH * 0.06, targetW * 0.42, targetH * 0.18, 0, 0, Math.PI * 2);
+  layerCtx.ellipse(0, ry * 0.12, rx * 0.92, ry * 0.7, 0, 0, Math.PI * 2);
   layerCtx.fill();
   layerCtx.restore();
 
-  // 2) Full jewelry
+  for (let py = 0; py < bh; py++) {
+    for (let px = 0; px < bw; px++) {
+      const gx = x0 + px + 0.5;
+      const gy = y0 + py + 0.5;
+      const dx = gx - center.x;
+      const dy = gy - center.y;
+      // rotate into bracelet local frame (X across wrist, Y along forearm)
+      const lx = dx * cosA + dy * sinA;
+      const ly = -dx * sinA + dy * cosA;
+      const nx = lx / rx;
+      const ny = ly / ry;
+      const er = Math.hypot(nx, ny);
+      if (er < rInner || er > rOuter) continue;
+
+      const theta = Math.atan2(ny, nx);
+      // Facing camera: prefer the "top" of the cylinder toward knuckles (frontAng)
+      const viewDot = Math.cos(theta - (frontAng - across));
+      // Hide back of wrist (negative hemisphere)
+      if (viewDot < -0.08) continue;
+
+      const u = ((theta / (Math.PI * 2)) + 0.5) * (sw - 1);
+      const v = ((er - rInner) / Math.max(1e-6, rOuter - rInner)) * (sh - 1);
+      let [r, g, b, a] = sampleBilinear(td, sw, sh, u, v);
+      if (a < 8) {
+        r = avg[0];
+        g = avg[1];
+        b = avg[2];
+        a = 255;
+      }
+
+      // Cylinder shading + specular
+      const shade = 0.42 + 0.58 * Math.max(0, viewDot);
+      const spec = Math.pow(Math.max(0, viewDot), 18) * 70;
+      // rim light on band edges
+      const rim = Math.pow(1 - Math.abs((er - (rInner + rOuter) / 2) / ((rOuter - rInner) / 2)), 2) * 18;
+      r = clamp(r * shade + spec + rim, 0, 255);
+      g = clamp(g * shade + spec * 0.92 + rim * 0.85, 0, 255);
+      b = clamp(b * shade + spec * 0.7 + rim * 0.55, 0, 255);
+
+      // Soft AA near band edges
+      const edge = Math.min(
+        Math.abs(er - rInner) / 0.04,
+        Math.abs(er - rOuter) / 0.04,
+        1
+      );
+      const alpha = clamp(a * edge * (0.55 + 0.45 * Math.max(0, viewDot)), 0, 255);
+
+      const o = (py * bw + px) * 4;
+      bd[o] = r;
+      bd[o + 1] = g;
+      bd[o + 2] = b;
+      bd[o + 3] = alpha;
+    }
+  }
+
+  // Soft screw / stud accents along circumference (Love-bracelet cue) using darker metal
+  for (let k = 0; k < 8; k++) {
+    const th = -Math.PI * 0.85 + (k / 7) * Math.PI * 1.7;
+    const viewDot = Math.cos(th - (frontAng - across));
+    if (viewDot < 0.15) continue;
+    const lx = Math.cos(th) * rx;
+    const ly = Math.sin(th) * ry;
+    const gx = center.x + lx * cosA - ly * sinA;
+    const gy = center.y + lx * sinA + ly * cosA;
+    const sx = Math.floor(gx - x0);
+    const sy = Math.floor(gy - y0);
+    const rad = Math.max(2, thickness * 0.28);
+    for (let yy = -rad; yy <= rad; yy++) {
+      for (let xx = -rad; xx <= rad; xx++) {
+        if (xx * xx + yy * yy > rad * rad) continue;
+        const px = sx + xx;
+        const py = sy + yy;
+        if (px < 0 || py < 0 || px >= bw || py >= bh) continue;
+        const o = (py * bw + px) * 4;
+        if (bd[o + 3] < 40) continue;
+        const dark = 0.72 + 0.2 * (1 - Math.hypot(xx, yy) / rad);
+        bd[o] *= dark;
+        bd[o + 1] *= dark;
+        bd[o + 2] *= dark * 0.95;
+        bd[o + 3] = Math.max(bd[o + 3], 220);
+      }
+    }
+  }
+
+  const tmp = document.createElement("canvas");
+  tmp.width = bw;
+  tmp.height = bh;
+  tmp.getContext("2d").putImageData(band, 0, 0);
+  layerCtx.drawImage(tmp, x0, y0);
+
+  // Skin shows through inner hole — stamp body into ellipse interior
   layerCtx.save();
   layerCtx.translate(center.x, center.y);
   layerCtx.rotate(across);
-  layerCtx.imageSmoothingEnabled = true;
-  layerCtx.imageSmoothingQuality = "high";
-  layerCtx.drawImage(crop, -targetW / 2, -targetH / 2, targetW, targetH);
+  layerCtx.beginPath();
+  layerCtx.ellipse(0, 0, rx * rInner * 0.98, ry * rInner * 0.98, 0, 0, Math.PI * 2);
+  layerCtx.clip();
+  layerCtx.setTransform(1, 0, 0, 1, 0, 0);
+  layerCtx.drawImage(bodyCanvas, 0, 0);
   layerCtx.restore();
-
-  // 3) Cover hole + back half with body pixels (wrist goes through / hides back)
-  const stamp = (pathFn) => {
-    layerCtx.save();
-    layerCtx.translate(center.x, center.y);
-    layerCtx.rotate(hideRot);
-    layerCtx.beginPath();
-    pathFn(layerCtx);
-    layerCtx.clip();
-    layerCtx.setTransform(1, 0, 0, 1, 0, 0);
-    layerCtx.drawImage(bodyCanvas, 0, 0);
-    layerCtx.restore();
-  };
-
-  stamp((ctx) => {
-    ctx.ellipse(0, 0, targetW * 0.3, Math.max(targetH * 0.3, targetW * 0.12), 0, 0, Math.PI * 2);
-  });
-  stamp((ctx) => {
-    // Only the far half of the band (behind wrist)
-    ctx.rect(-targetW * 0.55, targetH * 0.02, targetW * 1.1, targetH * 0.55);
-  });
 }
 
 export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring") {
@@ -157,22 +331,32 @@ export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring"
     targetW = Math.max(targetW, minWidthForType(out.width, type));
     const aspect = crop.height / Math.max(crop.width, 1);
     let targetH = targetW * aspect;
-    if (type === "bracelet") {
-      targetH = Math.min(Math.max(targetW * Math.min(aspect, 1.05), targetW * 0.62), targetW * 1.05);
-    }
     if (type === "necklace") targetH = targetW * aspect * 0.9;
 
     const angle = t.angle || 0;
 
     if (type === "bracelet") {
-      wrapBracelet(
+      wrapBraceletCylinder(
         lctx,
         bodyCanvas,
         crop,
         t.center,
         targetW,
-        targetH,
         angle,
+        t.frontAngle
+      );
+      return;
+    }
+
+    if (type === "ring") {
+      // Thin band around finger (same cylinder model, smaller radius)
+      wrapBraceletCylinder(
+        lctx,
+        bodyCanvas,
+        crop,
+        t.center,
+        Math.max(targetW * 1.15, out.width * 0.06),
+        (t.angle || 0) + 90,
         t.frontAngle
       );
       return;
@@ -188,7 +372,6 @@ export async function composeTryOn(bodyImg, jewelryCanvas, target, type = "ring"
   };
 
   placeOne(target);
-  // Earrings: only selected side (no alt double)
   octx.drawImage(layer, 0, 0);
   return out;
 }
@@ -213,9 +396,9 @@ export function fallbackTarget(bodyImg, type = "ring") {
   }
   if (type === "bracelet") {
     return {
-      center: { x: w * 0.5, y: h * 0.34 },
-      width: w * 0.4,
-      angle: 0,
+      center: { x: w * 0.5, y: h * 0.42 },
+      width: w * 0.28,
+      angle: 8,
       frontAngle: -90,
     };
   }
