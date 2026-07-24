@@ -8,7 +8,7 @@
   <base href="./" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon16" />
+  <link rel="stylesheet" href="./public/studio.css?v=20260724-tryon17" />
 </head>
 <body class="studio-body">
   <div class="studio-shell">
@@ -80,20 +80,21 @@
       <canvas id="cameraSnap" class="is-hidden"></canvas>
       <div id="cameraGuide" class="camera-guide" data-type="bracelet" data-ear="right" aria-hidden="true">
         <div class="guide-dim"></div>
-        <img class="guide-art" data-for="bracelet" src="./public/guides/bracelet.png?v=16" alt="" />
-        <img class="guide-art" data-for="ring" src="./public/guides/ring.png?v=16" alt="" />
-        <img class="guide-art" data-for="earring" data-ear-side="right" src="./public/guides/ear-right.png?v=16" alt="" />
-        <img class="guide-art" data-for="earring" data-ear-side="left" src="./public/guides/ear-left.png?v=16" alt="" />
-        <img class="guide-art" data-for="necklace" src="./public/guides/necklace.png?v=16" alt="" />
+        <img class="guide-art" data-for="bracelet" src="./public/guides/bracelet.png?v=17" alt="" />
+        <img class="guide-art" data-for="ring" src="./public/guides/ring.png?v=17" alt="" />
+        <img class="guide-art" data-for="earring" data-ear-side="right" src="./public/guides/ear-right.png?v=17" alt="" />
+        <img class="guide-art" data-for="earring" data-ear-side="left" src="./public/guides/ear-left.png?v=17" alt="" />
+        <img class="guide-art" data-for="necklace" src="./public/guides/necklace.png?v=17" alt="" />
         <p id="guideCaption" class="guide-caption">손↑ · 손목(+) · 팔뚝↓</p>
+        <p id="alignAlert" class="align-alert is-hidden" role="status" aria-live="polite"></p>
       </div>
     </div>
     <div class="camera-bottom">
       <button type="button" id="shutterBtn" class="shutter" aria-label="촬영"></button>
-      <p class="camera-sub">가이드에 맞춘 뒤 가운데 버튼으로 촬영하세요</p>
+      <p id="cameraSub" class="camera-sub">가이드에 맞추면 자동 촬영됩니다 · 직접 눌러도 됩니다</p>
     </div>
   </div>
 
-  <script type="module" src="./src/studio.js?v=20260724-tryon16"></script>
+  <script type="module" src="./src/studio.js?v=20260724-tryon17"></script>
 </body>
 </html>
