@@ -52,10 +52,12 @@ async function createCpu(factory, options, label) {
 }
 
 function detectorsForType(type) {
-  if (type === "ring" || type === "bracelet") return ["hand"];
+  // Bracelet: hand + pose (wrist) so fist shots still resolve.
+  if (type === "bracelet") return ["hand", "pose"];
+  if (type === "ring") return ["hand"];
   if (type === "earring") return ["face"];
   if (type === "necklace") return ["pose"];
-  return ["hand"];
+  return ["hand", "pose"];
 }
 
 export async function initDetectors(needed = ["hand"], onStatus = () => {}) {
@@ -167,8 +169,22 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
 
   try {
     if (hand) {
-      const handRes = hand.detect(imageElement);
+      // Detect from a canvas copy — more reliable than raw <img> on some mobiles.
+      const probe = document.createElement("canvas");
+      probe.width = w;
+      probe.height = h;
+      probe.getContext("2d").drawImage(imageElement, 0, 0, w, h);
+      let handRes = hand.detect(probe);
       hands = (handRes.landmarks || []).map((lm) => toPx(lm, w, h));
+      if (!hands.length) {
+        // Mild contrast boost retry
+        const ctx = probe.getContext("2d");
+        ctx.filter = "contrast(1.15) brightness(1.05)";
+        ctx.drawImage(imageElement, 0, 0, w, h);
+        ctx.filter = "none";
+        handRes = hand.detect(probe);
+        hands = (handRes.landmarks || []).map((lm) => toPx(lm, w, h));
+      }
     }
   } catch (e) { console.warn("hand detect", e); }
   try {
@@ -184,50 +200,102 @@ export async function detectBody(imageElement, preferredType = "auto", onStatus 
     }
   } catch (e) { console.warn("pose detect", e); }
 
-  if (hands[0]?.[0] && hands[0][9] && hands[0][5] && hands[0][17]) {
-    const wrist = hands[0][0];
-    const midMcp = hands[0][9];
-    const indexMcp = hands[0][5];
-    const pinkyMcp = hands[0][17];
-    const midTip = hands[0][12] || midMcp;
-    // Fist photos shrink palmW — use hand length so bracelet stays wrist-sized.
-    const handLen = Math.max(dist(wrist, midTip), dist(wrist, midMcp), w * 0.15, 1);
-    const palmW = Math.max(dist(indexMcp, pinkyMcp), handLen * 0.42, w * 0.14);
+  // Prefer the largest / most central hand for bracelet & ring.
+  let bestHand = null;
+  let bestHandScore = -1;
+  for (const lm of hands) {
+    if (!lm?.[0] || !lm[9]) continue;
+    const span = dist(lm[0], lm[9]);
+    const cx = (lm[0].x + lm[9].x) / 2;
+    const cy = (lm[0].y + lm[9].y) / 2;
+    const centerBias = 1 - Math.hypot(cx / w - 0.5, cy / h - 0.45);
+    const score = span * (0.7 + 0.3 * Math.max(0, centerBias));
+    if (score > bestHandScore) {
+      bestHandScore = score;
+      bestHand = lm;
+    }
+  }
+
+  if (bestHand?.[0] && bestHand[9] && bestHand[5] && bestHand[17]) {
+    const wrist = bestHand[0];
+    const midMcp = bestHand[9];
+    const indexMcp = bestHand[5];
+    const pinkyMcp = bestHand[17];
+    const midTip = bestHand[12] || midMcp;
+    const handLen = Math.max(dist(wrist, midTip), dist(wrist, midMcp), w * 0.12, 1);
+    const palmW = Math.max(dist(indexMcp, pinkyMcp), handLen * 0.38, w * 0.1);
     const vx = wrist.x - midMcp.x;
     const vy = wrist.y - midMcp.y;
     const vlen = Math.hypot(vx, vy) || 1;
     const ux = vx / vlen;
     const uy = vy / vlen;
-    // Sit on the wrist — small offset past wrist landmark (not mid-forearm).
+    // Slightly past wrist bone toward forearm — classic bracelet seat.
     targets.bracelet = {
       center: {
-        x: wrist.x + ux * handLen * 0.16,
-        y: wrist.y + uy * handLen * 0.16,
+        x: wrist.x + ux * handLen * 0.12,
+        y: wrist.y + uy * handLen * 0.12,
       },
-      width: Math.max(palmW * 1.55, handLen * 0.48, w * 0.2),
+      width: Math.max(palmW * 1.35, handLen * 0.4, w * 0.16),
       angle: angleDeg(indexMcp, pinkyMcp),
       frontAngle: (Math.atan2(midMcp.y - wrist.y, midMcp.x - wrist.x) * 180) / Math.PI,
       points: [wrist, indexMcp, pinkyMcp, midTip],
+      source: "hand",
     };
   }
 
-  if (hands[0]?.[5] && hands[0][8]) {
-    // Index finger (most common ring finger) — MCP→tip
-    const mcp = hands[0][5];
-    const tip = hands[0][8];
+  // Pose wrist fallback when fist confuses HandLandmarker.
+  if (!targets.bracelet && poses[0]) {
+    const lw = poses[0][15];
+    const rw = poses[0][16];
+    const le = poses[0][13];
+    const re = poses[0][14];
+    const candidates = [];
+    if (lw && le) candidates.push({ wrist: lw, elbow: le, side: "left" });
+    if (rw && re) candidates.push({ wrist: rw, elbow: re, side: "right" });
+    candidates.sort((a, b) => {
+      const ca = Math.hypot(a.wrist.x / w - 0.5, a.wrist.y / h - 0.45);
+      const cb = Math.hypot(b.wrist.x / w - 0.5, b.wrist.y / h - 0.45);
+      return ca - cb;
+    });
+    const pick = candidates[0];
+    if (pick) {
+      const armLen = Math.max(dist(pick.wrist, pick.elbow), w * 0.2);
+      const vx = pick.elbow.x - pick.wrist.x;
+      const vy = pick.elbow.y - pick.wrist.y;
+      const vlen = Math.hypot(vx, vy) || 1;
+      targets.bracelet = {
+        center: {
+          x: pick.wrist.x + (vx / vlen) * armLen * 0.06,
+          y: pick.wrist.y + (vy / vlen) * armLen * 0.06,
+        },
+        width: Math.max(armLen * 0.22, w * 0.18),
+        angle: angleDeg(pick.wrist, pick.elbow) + 90,
+        frontAngle: (Math.atan2(-vy, -vx) * 180) / Math.PI,
+        points: [pick.wrist, pick.elbow],
+        source: "pose",
+      };
+    }
+  }
+
+  if (bestHand?.[5] && bestHand[8]) {
+    const mcp = bestHand[5];
+    const pip = bestHand[6] || mcp;
+    const tip = bestHand[8];
+    targets.ring = {
+      center: { x: (mcp.x + pip.x) / 2, y: (mcp.y + pip.y) / 2 },
+      width: dist(mcp, tip) * 0.42,
+      angle: angleDeg(mcp, tip),
+      frontAngle: angleDeg(mcp, tip) - 90,
+      points: [mcp, tip],
+    };
+  } else if (bestHand?.[13] && bestHand[16]) {
+    const mcp = bestHand[13];
+    const tip = bestHand[16];
     targets.ring = {
       center: { x: (mcp.x + tip.x) / 2, y: (mcp.y + tip.y) / 2 },
       width: dist(mcp, tip) * 0.55,
       angle: angleDeg(mcp, tip),
-      points: [mcp, tip],
-    };
-  } else if (hands[0]?.[13] && hands[0][16]) {
-    const mcp = hands[0][13];
-    const tip = hands[0][16];
-    targets.ring = {
-      center: { x: (mcp.x + tip.x) / 2, y: (mcp.y + tip.y) / 2 },
-      width: dist(mcp, tip) * 0.7,
-      angle: angleDeg(mcp, tip),
+      frontAngle: angleDeg(mcp, tip) - 90,
       points: [mcp, tip],
     };
   }
