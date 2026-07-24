@@ -2,6 +2,7 @@ import { prepareJewelry } from "./services/jewelry.js";
 import { detectBody } from "./services/mediapipe.js";
 import { assetUrl, guessTypeFromText } from "./services/portfolio.js";
 import { composeTryOn, fallbackTarget } from "./services/tryon.js";
+import { evaluateAlignment, stopAlignClock } from "./services/align.js";
 
 const params = new URLSearchParams(location.search);
 const embedded = params.get("embed") === "1";
@@ -19,6 +20,13 @@ const state = {
   wearType: "bracelet",
   earSide: "right",
   cameraStream: null,
+  cameraOpen: false,
+  cameraHistoryLocal: false,
+  alignRaf: 0,
+  goodStreak: 0,
+  autoCaptureArmed: true,
+  capturing: false,
+  closingCameraFromUi: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -78,7 +86,6 @@ function imageCandidates(raw) {
   const pushMirrors = (path) => {
     const p = String(path || "").replace(/^\/+/, "");
     if (!p) return;
-    // Studio runs on github.io — prefer same-origin first (faster, fewer hangs).
     if (onGithubHost) {
       push(`${location.origin}/${p}`);
       push(`https://saveasme1.github.io/${p}`);
@@ -104,7 +111,6 @@ function imageCandidates(raw) {
   return list;
 }
 
-/** Never hang: onload / onerror / timeout only. */
 function loadIntoProductImg(url, ms = 4500) {
   const img = $("productImage");
   return new Promise((resolve, reject) => {
@@ -120,7 +126,6 @@ function loadIntoProductImg(url, ms = 4500) {
     const timer = setTimeout(() => finish(false, new Error("이미지 로딩 시간 초과")), ms);
     img.onload = () => finish(true);
     img.onerror = () => finish(false, new Error("load failed"));
-    // cache-bust soft stalls without breaking CDN cache forever
     const sep = url.includes("?") ? "&" : "?";
     img.src = `${url}${sep}_tryon=${Date.now()}`;
   });
@@ -152,7 +157,6 @@ async function loadProduct() {
   for (const url of candidates) {
     try {
       await loadIntoProductImg(url, 4500);
-      // Drop cache-bust query for jewelry source (store clean URL)
       img.src = url;
       img.alt = state.item.title || "선택 제품";
       show(img);
@@ -198,14 +202,14 @@ function onPickFile(event) {
 }
 
 const CAMERA_HINT = {
-  ring: "손가락을 위로 · 검지 원(+)에 맞추세요",
+  ring: "왼손 손등 · 검지 주황 링(+)에 맞추세요",
   bracelet: "주먹을 위로 · 주황 링(+)에 손목을 맞추세요",
   earring: "얼굴 가이드 안 · 선택한 귀(+)에 맞추세요",
   necklace: "얼굴을 위로 · 목(+)에 맞추세요",
 };
 
 const GUIDE_CAPTION = {
-  ring: "검지(+)에 반지 손가락",
+  ring: "왼손 손등 · 검지(+)",
   bracelet: "손↑ · 손목(+) · 팔뚝↓",
   earring: "선택한 귀에 + 맞추기",
   necklace: "얼굴↑ · 목·쇄골(+)",
@@ -220,6 +224,13 @@ const WEAR_LABEL = {
 
 function resolveType() {
   return state.wearType || guessTypeFromText(state.item.title, state.item.category || "") || "bracelet";
+}
+
+function postParent(type) {
+  if (!embedded || !window.parent || window.parent === window) return;
+  try {
+    window.parent.postMessage({ type }, "*");
+  } catch (_) {}
 }
 
 function setEarSide(side) {
@@ -264,13 +275,105 @@ function stopCamera() {
   if (video) video.srcObject = null;
 }
 
-function closeCameraSheet() {
+function stopAlignLoop() {
+  if (state.alignRaf) {
+    cancelAnimationFrame(state.alignRaf);
+    state.alignRaf = 0;
+  }
+  stopAlignClock();
+  state.goodStreak = 0;
+  const sheet = $("cameraSheet");
+  sheet?.classList.remove("is-align-ok", "is-align-far");
+  const alert = $("alignAlert");
+  if (alert) {
+    alert.textContent = "";
+    alert.classList.add("is-hidden");
+    alert.classList.remove("is-ok");
+  }
+}
+
+function applyAlignUi(result) {
+  const sheet = $("cameraSheet");
+  const hint = $("cameraHint");
+  const alert = $("alignAlert");
+  if (!sheet || !result) return;
+
+  sheet.classList.toggle("is-align-ok", Boolean(result.ok));
+  sheet.classList.toggle("is-align-far", Boolean(result.far));
+
+  if (result.message && hint) hint.textContent = result.message;
+
+  if (!alert) return;
+  if (result.far || result.ok) {
+    alert.textContent = result.message || "";
+    alert.classList.toggle("is-ok", Boolean(result.ok));
+    alert.classList.remove("is-hidden");
+  } else {
+    alert.textContent = "";
+    alert.classList.add("is-hidden");
+    alert.classList.remove("is-ok");
+  }
+}
+
+async function alignTick() {
+  if (!state.cameraOpen || state.capturing) return;
+  const video = $("cameraVideo");
+  const type = resolveType();
+  try {
+    const result = await evaluateAlignment(video, type, state.earSide);
+    if (result) {
+      applyAlignUi(result);
+      if (result.ok) {
+        state.goodStreak += 1;
+        if (state.autoCaptureArmed && state.goodStreak >= 10) {
+          state.autoCaptureArmed = false;
+          shutterCapture();
+          return;
+        }
+      } else {
+        state.goodStreak = 0;
+      }
+    }
+  } catch (err) {
+    console.warn("alignTick", err);
+  }
+  state.alignRaf = requestAnimationFrame(alignTick);
+}
+
+function startAlignLoop() {
+  stopAlignLoop();
+  state.autoCaptureArmed = true;
+  state.goodStreak = 0;
+  state.alignRaf = requestAnimationFrame(alignTick);
+}
+
+function closeCameraSheet({ fromHistory = false } = {}) {
+  if (!state.cameraOpen && $("cameraSheet")?.hidden) return;
+
+  stopAlignLoop();
   stopCamera();
   const sheet = $("cameraSheet");
-  if (!sheet) return;
-  sheet.hidden = true;
-  sheet.classList.add("is-hidden");
+  if (sheet) {
+    sheet.hidden = true;
+    sheet.classList.add("is-hidden");
+    sheet.classList.remove("is-align-ok", "is-align-far");
+  }
   document.body.classList.remove("camera-open");
+  state.cameraOpen = false;
+  state.capturing = false;
+  state.autoCaptureArmed = true;
+
+  if (fromHistory) return;
+
+  if (embedded) {
+    postParent("heritage-tryon-camera-close");
+    return;
+  }
+  if (state.cameraHistoryLocal) {
+    state.cameraHistoryLocal = false;
+    state.closingCameraFromUi = true;
+    history.back();
+  }
 }
 
 async function openGuidedCamera() {
@@ -288,7 +391,17 @@ async function openGuidedCamera() {
   sheet.hidden = false;
   sheet.classList.remove("is-hidden");
   document.body.classList.add("camera-open");
+  state.cameraOpen = true;
+  state.capturing = false;
+  state.autoCaptureArmed = true;
   setStatus("카메라 권한을 허용하면 가이드가 표시됩니다…");
+
+  if (embedded) {
+    postParent("heritage-tryon-camera-open");
+  } else if (!state.cameraHistoryLocal) {
+    history.pushState({ heritageCamera: true }, "");
+    state.cameraHistoryLocal = true;
+  }
 
   try {
     stopCamera();
@@ -304,6 +417,7 @@ async function openGuidedCamera() {
     video.srcObject = stream;
     await video.play();
     setStatus(CAMERA_HINT[state.wearType] || "가이드에 맞춘 뒤 촬영하세요.");
+    startAlignLoop();
   } catch (err) {
     console.warn(err);
     closeCameraSheet();
@@ -313,18 +427,23 @@ async function openGuidedCamera() {
 }
 
 function shutterCapture() {
+  if (state.capturing) return;
   const video = $("cameraVideo");
   const canvas = $("cameraSnap");
   if (!video || !canvas || !video.videoWidth) {
     setStatus("카메라가 아직 준비되지 않았습니다.", "is-err");
     return;
   }
+  state.capturing = true;
+  stopAlignLoop();
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0);
   canvas.toBlob((blob) => {
     if (!blob) {
+      state.capturing = false;
       setStatus("촬영에 실패했습니다.", "is-err");
+      startAlignLoop();
       return;
     }
     closeCameraSheet();
@@ -368,7 +487,6 @@ async function runMergeTryOn() {
 
     const useType = detection.type || type;
     let target = detection.target;
-    // Never place a bracelet with ring (finger) coordinates.
     if (useType === "bracelet") {
       target = detection.allTargets?.bracelet || fallbackTarget(state.bodyImage, "bracelet");
     } else if (!target) {
@@ -425,6 +543,7 @@ function download() {
 }
 
 function closeStudio() {
+  closeCameraSheet();
   if (embedded && window.parent && window.parent !== window) {
     window.parent.postMessage({ type: "heritage-tryon-close" }, "*");
     return;
@@ -433,12 +552,29 @@ function closeStudio() {
   else location.href = "https://hand-made.kr/landing.html?open=portfolio";
 }
 
+window.addEventListener("popstate", () => {
+  if (state.closingCameraFromUi) {
+    state.closingCameraFromUi = false;
+    return;
+  }
+  if (state.cameraOpen) {
+    state.cameraHistoryLocal = false;
+    closeCameraSheet({ fromHistory: true });
+  }
+});
+
+window.addEventListener("message", (event) => {
+  if (event?.data?.type === "heritage-tryon-close-camera") {
+    closeCameraSheet({ fromHistory: true });
+  }
+});
+
 $("closeStudio").addEventListener("click", () => {
   closeCameraSheet();
   closeStudio();
 });
 $("openCamera")?.addEventListener("click", openGuidedCamera);
-$("closeCamera")?.addEventListener("click", closeCameraSheet);
+$("closeCamera")?.addEventListener("click", () => closeCameraSheet());
 $("shutterBtn")?.addEventListener("click", shutterCapture);
 $("fileInput").addEventListener("change", onPickFile);
 $("mergeTryOn").addEventListener("click", runMergeTryOn);
