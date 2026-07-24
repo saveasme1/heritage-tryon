@@ -209,6 +209,15 @@ html, body { margin: 0; min-height: 100%; }
   font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+.camera-sheet.is-align-far .camera-hint,
+.camera-sheet.is-align-far #guideCaption {
+  color: #ffb089;
+  text-shadow: 0 0 12px rgba(255, 100, 40, 0.55);
+}
+.camera-sheet.is-align-ok .camera-hint {
+  color: #b8f5c8;
 }
 .camera-stage {
   position: relative;
@@ -236,8 +245,15 @@ html, body { margin: 0; min-height: 100%; }
 .guide-dim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(0, 0, 0, 0.22);
   pointer-events: none;
+  transition: background 0.25s ease;
+}
+.camera-sheet.is-align-far .guide-dim {
+  background: rgba(40, 8, 0, 0.38);
+}
+.camera-sheet.is-align-ok .guide-dim {
+  background: rgba(0, 24, 12, 0.18);
 }
 .guide-art {
   display: none;
@@ -249,7 +265,45 @@ html, body { margin: 0; min-height: 100%; }
   object-fit: contain;
   pointer-events: none;
   filter: drop-shadow(0 0 1px rgba(0,0,0,0.35));
+  transition: filter 0.2s ease, transform 0.25s ease;
 }
+.camera-sheet.is-align-far .guide-art {
+  filter: drop-shadow(0 0 8px rgba(255, 90, 30, 0.85)) drop-shadow(0 0 1px rgba(0,0,0,0.4));
+  animation: guidePulse 0.9s ease-in-out infinite;
+}
+.camera-sheet.is-align-ok .guide-art {
+  filter: drop-shadow(0 0 10px rgba(80, 220, 140, 0.55));
+}
+@keyframes guidePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.02); opacity: 0.92; }
+}
+.align-alert {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 18%;
+  z-index: 3;
+  margin: 0 auto;
+  max-width: 34ch;
+  padding: 12px 14px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: rgba(180, 48, 12, 0.88);
+  border: 1px solid rgba(255, 180, 120, 0.55);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  pointer-events: none;
+}
+.align-alert.is-ok {
+  background: rgba(18, 110, 62, 0.88);
+  border-color: rgba(140, 230, 180, 0.5);
+}
+.align-alert.is-hidden { display: none !important; }
 .camera-guide[data-type="bracelet"] .guide-art[data-for="bracelet"],
 .camera-guide[data-type="ring"] .guide-art[data-for="ring"],
 .camera-guide[data-type="necklace"] .guide-art[data-for="necklace"] {
@@ -327,17 +381,23 @@ html, body { margin: 0; min-height: 100%; }
   background: #ff8236;
   box-shadow: 0 0 0 4px rgba(255,130,54,0.25);
   cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
 }
 .shutter:active { transform: scale(0.96); }
+.camera-sheet.is-align-ok .shutter {
+  background: #2bb673;
+  box-shadow: 0 0 0 6px rgba(43, 182, 115, 0.35);
+  animation: shutterReady 1s ease-in-out infinite;
+}
+@keyframes shutterReady {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
 .camera-sub {
   margin: 0;
   font-size: 12px;
   color: rgba(255,255,255,0.7);
   text-align: center;
-}
-@keyframes guidePulse {
-  0%, 100% { opacity: 0.75; }
-  50% { opacity: 1; }
 }
 .btn,
 .select {
